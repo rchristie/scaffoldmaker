@@ -764,8 +764,7 @@ class MeshType_3d_stomach1(Scaffold_base):
         xEllipses = []
         d1Ellipses = []
         for n in range(elementsAlongFundus + 1, len(sx)):
-            px, pd1 = createEllipsePoints(sx[n], 2 * math.pi, sd2[n], sd3[n], elementsCountAroundDuod,
-                                          startRadians=0.0)
+            px, pd1 = createEllipsePoints(sx[n], sd2[n], sd3[n], elementsCountAroundDuod, loop=True)
             xEllipses.append(px)
             d1Ellipses.append(pd1)
 
@@ -1153,15 +1152,13 @@ class MeshType_3d_stomach1(Scaffold_base):
                                                        sd2[eiLowerLimit + 1], sd12[eiLowerLimit + 1], xiProjection)
                 axis2 = interp.interpolateCubicHermite(sd3[eiLowerLimit], sd13[eiLowerLimit],
                                                        sd3[eiLowerLimit + 1], sd13[eiLowerLimit + 1], xiProjection)
-                xAround, d1Around = createEllipsePoints(xProjection, 2 * math.pi, axis1, axis2, elementsCountAroundDuod,
-                                                        startRadians=0.0)
+                xAround, d1Around = createEllipsePoints(xProjection, axis1, axis2, elementsCountAroundDuod, loop=True)
 
             elif startProportion2 == 0:
-                xAround, d1Around = createEllipsePoints(sx[0], 2 * math.pi, sd2[0], sd3[0], elementsCountAroundDuod,
-                                                        startRadians=0.0)
+                xAround, d1Around = createEllipsePoints(sx[0], sd2[0], sd3[0], elementsCountAroundDuod, loop=True)
+
             elif startProportion2 == 1.0:
-                xAround, d1Around = createEllipsePoints(sx[-1], 2 * math.pi, sd2[-1], sd3[-1], elementsCountAroundDuod,
-                                                        startRadians=0.0)
+                xAround, d1Around = createEllipsePoints(sx[-1], sd2[-1], sd3[-1], elementsCountAroundDuod, loop=True)
 
             d1Around = \
                 interp.smoothCubicHermiteDerivativesLoop(xAround, d1Around,

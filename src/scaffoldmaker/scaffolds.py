@@ -29,6 +29,7 @@ from scaffoldmaker.meshtypes.meshtype_3d_heartatria2 import MeshType_3d_heartatr
 from scaffoldmaker.meshtypes.meshtype_3d_heartventricles1 import MeshType_3d_heartventricles1
 from scaffoldmaker.meshtypes.meshtype_3d_heartventricles2 import MeshType_3d_heartventricles2
 from scaffoldmaker.meshtypes.meshtype_3d_heartventricles3 import MeshType_3d_heartventricles3
+from scaffoldmaker.meshtypes.meshtype_3d_heartventricles4 import MeshType_3d_heartventricles4
 from scaffoldmaker.meshtypes.meshtype_3d_heartventriclesbase1 import MeshType_3d_heartventriclesbase1
 from scaffoldmaker.meshtypes.meshtype_3d_heartventriclesbase2 import MeshType_3d_heartventriclesbase2
 from scaffoldmaker.meshtypes.meshtype_3d_lens1 import MeshType_3d_lens1
@@ -81,6 +82,7 @@ class Scaffolds(object):
             MeshType_3d_heartventricles1,
             MeshType_3d_heartventricles2,
             MeshType_3d_heartventricles3,
+            MeshType_3d_heartventricles4,
             MeshType_3d_heartventriclesbase1,
             MeshType_3d_heartventriclesbase2,
             MeshType_3d_lens1,

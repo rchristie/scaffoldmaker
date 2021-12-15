@@ -1,6 +1,6 @@
-'''
+"""
 Utility functions for geometry.
-'''
+"""
 
 from __future__ import division
 
@@ -13,24 +13,26 @@ from scaffoldmaker.utils.tracksurface import calculate_surface_delta_xi
 
 
 def getApproximateEllipsePerimeter(a, b):
-    '''
+    """
     Get perimeter of ellipse using Ramanujan II approximation.
     :param a: Major axis length.
     :param b: Minor axis length.
     :return: Perimeter length.
-    '''
+    """
     h = ((a-b)/(a+b))**2
     return math.pi*(a + b)*(1.0 + 3.0*h/(10.0 + math.sqrt(4.0 - 3.0*h)))
 
+
 def getEllipseAngleFromVector(a, b, x, y):
-    '''
+    """
     Given an ellipse with major and minor axes a and b cented at (0.0, 0.0),
     get angle in radians in direction of vector (dx, dy)
     :param a: Major axis length.
     :param b: Minor axis length.
-    :param x, y: Non-zero vector direction
+    :param x: Non-zero vector direction
+    :param y: Non-zero vector direction
     :return: Angle in radians.
-    '''
+    """
     # Compute theta such that
     # r*x = a*cos_theta
     # r*y = b*sin_theta
@@ -40,17 +42,16 @@ def getEllipseAngleFromVector(a, b, x, y):
     return math.atan2(a*y, b*x)
 
 def getEllipseArcLength(a, b, angle1Radians, angle2Radians, method='line segment'):
-    '''
+    """
     Calculates perimeter distance between two angles, by integration if method is integrate by summing line segments at regular angles.
     :param a: Major axis length (On x, 0 / PI).
     :param b: Minor axis length.(On y, PI/2, 3PI/2).
     :param angle1Radians: First angle anticlockwise from major axis.
     :param angle2Radians: Second angle anticlockwise from major axis.
     :return: Perimeter length, positive if anticlockwise, otherwise negative.
-    '''
+    """
     angle1 = min(angle1Radians, angle2Radians)
     angle2 = max(angle1Radians, angle2Radians)
-
     if method == 'integrate':
         from scipy.integrate import quad
         import numpy as np
@@ -83,7 +84,7 @@ def getEllipseArcLength(a, b, angle1Radians, angle2Radians, method='line segment
         assert(False), 'Method is not implemented'
 
 def updateEllipseAngleByArcLength(a, b, inAngleRadians, arcLength, tol=1.0E-4, method=None):
-    '''
+    """
     Update angle around ellipse to subtend arcLength around the perimeter.
     Iterates using Newton's method.
     :param inAngleRadians: Initial angle anticlockwise from major axis.
@@ -92,7 +93,7 @@ def updateEllipseAngleByArcLength(a, b, inAngleRadians, arcLength, tol=1.0E-4, m
     :param b: Minor axis length.(On y, PI/2, 3PI/2).
     :param tol: Tolerance used for length tolerance.
     :return: New angle, in radians.
-    '''
+    """
     if method == 'Newton':
         def func(angle):
             return getEllipseArcLength(a, b, inAngleRadians, angle, method='integrate') - arcLength
@@ -117,8 +118,9 @@ def updateEllipseAngleByArcLength(a, b, inAngleRadians, arcLength, tol=1.0E-4, m
         #print('updateEllipseAngleByArcLength a', a, 'b', b, ', angle', inAngleRadians, ', arcLength', arcLength, ' -> ', angle)
     return angle
 
+
 def getEllipseRadiansToX(ax, bx, dx, initialTheta):
-    '''
+    """
     Iteratively compute theta in ax*cos(theta) + bx*sin(theta) = dx
     from initialTheta. Uses Newton's method.
     :param ax: x component of major axis.
@@ -126,7 +128,7 @@ def getEllipseRadiansToX(ax, bx, dx, initialTheta):
     :param dx: x distance from centre of ellipse.
     :param initialTheta: Initial value of theta needed since multi-valued.
     :return: theta in radians
-    '''
+    """
     theta = initialTheta
     iters = 0
     fTol = math.sqrt(ax*ax + bx*bx)*1.0E-10
@@ -135,10 +137,10 @@ def getEllipseRadiansToX(ax, bx, dx, initialTheta):
         sinAngle = math.sin(theta)
         f = ax*cosAngle + bx*sinAngle - dx
         if math.fabs(f) < fTol:
-            break;
+            break
         df = -ax*sinAngle + bx*cosAngle
-        #print(iters, '. theta', theta, 'f', f,'df',df,'-->',theta - f/df)
-        theta -= f/df
+        # print(iters, '. theta', theta, 'f', f,'df',df,'-->',theta - f/df)
+        theta -= f / df
         iters += 1
         if iters == 100:
             print('getEllipseRadiansToX: did not converge!')
@@ -178,8 +180,9 @@ def sampleEllipsePoints(centre: list, majorAxis: list, minorAxis: list, angle1Ra
         radians = updateEllipseAngleByArcLength(a, b, radians, elementArcLength, TOL, method="Newton")
     return px, pd1
 
-def createCirclePoints(cx, axis1, axis2, elementsCountAround, startRadians = 0.0):
-    '''
+
+def createCirclePoints(cx, axis1, axis2, elementsCountAround, startRadians=0.0):
+    """
     Create circular ring of points centred at cx, from axis1 around through axis2.
     Assumes axis1 and axis2 are orthogonal and equal magnitude.
     Dimension 3 only.
@@ -187,8 +190,9 @@ def createCirclePoints(cx, axis1, axis2, elementsCountAround, startRadians = 0.0
     :param axis1:  Vector from cx to inside at zero angle
     :param axis2:  Vector from cx to inside at 90 degree angle.
     :param elementsCountAround: Number of elements around.
+    :param startRadians: Angle from axis1 to start creating the circle from.
     :return: lists px, pd1
-    '''
+    """
     px = []
     pd1 = []
     radiansPerElementAround = 2.0*math.pi/elementsCountAround
@@ -196,23 +200,190 @@ def createCirclePoints(cx, axis1, axis2, elementsCountAround, startRadians = 0.0
     for n in range(elementsCountAround):
         cosRadiansAround = math.cos(radiansAround)
         sinRadiansAround = math.sin(radiansAround)
-        px.append([ (cx[c] + cosRadiansAround*axis1[c] + sinRadiansAround*axis2[c]) for c in range(3) ])
-        pd1.append([ radiansPerElementAround*(-sinRadiansAround*axis1[c] + cosRadiansAround*axis2[c]) for c in range(3) ])
+        px.append([(cx[c] + cosRadiansAround*axis1[c] + sinRadiansAround*axis2[c]) for c in range(3)])
+        pd1.append([radiansPerElementAround*(-sinRadiansAround*axis1[c] + cosRadiansAround*axis2[c]) for c in range(3)])
         radiansAround += radiansPerElementAround
     return px, pd1
 
 
+def createEllipsePoints(cx, axis1, axis2, elementsCountAround, radiansAround=2.0*math.pi, startRadians=0.0, loop=False):
+    """
+    Create ellipse points centred at cx, from axis1 around through axis2.
+    Assumes axis1 and axis2 are orthogonal.
+    :param cx: centre
+    :param axis1: Vector from cx to axis at zero angle
+    :param axis2: Vector from cx to axis at 90 degree angle.
+    :param elementsCountAround: Number of elements around.
+    :param radiansAround: Proportion of ellipse to be created in radians. Default 2*math.pi is a complete ellipse.
+    :param startRadians: Angle from axis1 to start creating the ellipse.
+    :param loop: Set True to not evaluate last row of points, where should be same as first.
+    :return: lists px, pd1
+    """
+    px = []
+    pd1 = []
+    magAxis1 = vector.magnitude(axis1)
+    magAxis2 = vector.magnitude(axis2)
+    totalPerimeter = getApproximateEllipsePerimeter(magAxis1, magAxis2)
+    partPerimeter = totalPerimeter * radiansAround / (2 * math.pi)
+    elementLength = partPerimeter / elementsCountAround
+    pointsCountAround = elementsCountAround if loop else elementsCountAround + 1
+
+    angleRadians = startRadians
+    for n in range(pointsCountAround):
+        if n > 0:
+            if n < elementsCountAround:
+                angleRadians = updateEllipseAngleByArcLength(magAxis1, magAxis2, angleRadians, elementLength)
+            else:
+                angleRadians = startRadians + radiansAround
+        cosRadiansAround = math.cos(angleRadians)
+        sinRadiansAround = math.sin(angleRadians)
+        x = [cx[0] + cosRadiansAround * axis1[0] + sinRadiansAround * axis2[0],
+             cx[1] + cosRadiansAround * axis1[1] + sinRadiansAround * axis2[1],
+             cx[2] + cosRadiansAround * axis1[2] + sinRadiansAround * axis2[2]]
+        px.append(x)
+        rd1 = [cosRadiansAround * axis2[c] - sinRadiansAround * axis1[c] for c in range(3)]
+        pd1.append(vector.setMagnitude(rd1, elementLength))
+
+    return px, pd1
+
+
+def createOvalPoints(cx, axis1, axis2, lengthAxis1b, elementsCountAround, radiansAround=2.0*math.pi, startRadians=0.0,
+                     loop=False):
+    """
+    Create points around an oval consisting of 2 half ellipses with a common axis2.
+    Assumes axis1 and axis2 are orthogonal.
+    Limitation: radiansAround/elementsCountAround < half smallest ellipse perimeter
+    :param cx: centre
+    :param axis1: Vector from cx to axis at zero angle
+    :param axis2: Vector from cx to axis at 90 degree angle.
+    :param lengthAxis1b: Length of axis1b opposite axis1. Axis 1 is mirrored and set to this magnitude.
+    :param elementsCountAround: Number of elements around.
+    :param radiansAround: Proportion of ellipse to be created in radians. Default 2*math.pi is a complete ellipse.
+    :param startRadians: Angle from axis1 to start creating the ellipse.
+    :param loop: Set True to not evaluate last row of points, where should be same as first.
+    :return: lists px, pd1
+    """
+    px = []
+    pd1 = []
+    magAxis1 = vector.magnitude(axis1)
+    magAxis2 = vector.magnitude(axis2)
+    totalPerimeter = 0.5*(getApproximateEllipsePerimeter(magAxis1, magAxis2) +
+                          getApproximateEllipsePerimeter(lengthAxis1b, magAxis2))
+    partPerimeter = totalPerimeter * radiansAround / (2 * math.pi)
+    elementLength = partPerimeter / elementsCountAround
+    pointsCountAround = elementsCountAround if loop else elementsCountAround + 1
+    axis1b = vector.setMagnitude(axis1, lengthAxis1b)
+    angleRadians = startRadians
+    for n in range(pointsCountAround):
+        if n > 0:
+            if n < elementsCountAround:
+                oldAngleRadians = angleRadians
+                oldMagAxis1 = magAxis1 if math.cos(angleRadians) > 0.0 else lengthAxis1b
+                angleRadians = updateEllipseAngleByArcLength(oldMagAxis1, magAxis2, angleRadians, elementLength)
+                newMagAxis1 = magAxis1 if math.cos(angleRadians) > 0.0 else lengthAxis1b
+                if newMagAxis1 is not oldMagAxis1:
+                    boundaryFraction = 0.25 if newMagAxis1 is magAxis1 else 0.75
+                    # update angle to nearest boundary between axis sizes, then do remainder
+                    boundaryRadians = 2.0 * math.pi * \
+                        (round(oldAngleRadians / (2.0 * math.pi) + boundaryFraction) - boundaryFraction)
+                    boundaryArcLength = getEllipseArcLength(oldMagAxis1, magAxis2, oldAngleRadians, boundaryRadians)
+                    angleRadians = updateEllipseAngleByArcLength(
+                        newMagAxis1, magAxis2, boundaryRadians, elementLength - boundaryArcLength)
+            else:
+                angleRadians = startRadians + radiansAround
+        cosRadiansAround = math.cos(angleRadians)
+        sinRadiansAround = math.sin(angleRadians)
+        useAxis1 = axis1 if cosRadiansAround > 0.0 else axis1b
+        x = [cx[0] + cosRadiansAround * useAxis1[0] + sinRadiansAround * axis2[0],
+             cx[1] + cosRadiansAround * useAxis1[1] + sinRadiansAround * axis2[1],
+             cx[2] + cosRadiansAround * useAxis1[2] + sinRadiansAround * axis2[2]]
+        px.append(x)
+        rd1 = [cosRadiansAround * axis2[c] - sinRadiansAround * useAxis1[c] for c in range(3)]
+        pd1.append(vector.setMagnitude(rd1, elementLength))
+
+    return px, pd1
+
+
+def revolvePoints(lx, ld, rx, rAxis, stepCount, radiansAround=2*math.pi, startRadians=0.0, loop=False):
+    """
+    Revolve nx, nd2 about rotation centre and compute 2D lattice of points and derivatives.
+    All vectors expected to have 3 components.
+    :param lx: Points up a curve.
+    :param ld: Derivatives up a curve.
+    :param rx: Centre of rotation.
+    :param rAxis: Axis of rotation. Unit vector
+    :param stepCount: Number of rotation steps, one less than number of points out.
+    :param radiansAround: Angle rotated in right hand sense about axis.
+    :param startRadians: Angle to start rotation at.
+    :param loop: Set True to not evaluate last row of points, where should be same as first.
+    :return: Lists nx, nd1, nd2. Ordered fastest around, starting at pole. Suitable for passing to TrackSurface.
+    """
+    nx = []
+    nd1 = []
+    nd2 = []
+    stepLimit = stepCount if loop else stepCount + 1
+    rotationMatrices = []
+    ux, uy, uz = rAxis
+    for step in range(stepLimit):
+        theta = startRadians + radiansAround * step / stepCount
+        cosTheta = math.cos(theta)
+        sinTheta = math.sin(theta)
+        one__cosTheta = 1.0 - cosTheta
+        rotationMatrices.append([
+            ux * ux * one__cosTheta + cosTheta,
+            ux * uy * one__cosTheta - uz * sinTheta,
+            ux * uz * one__cosTheta + uy * sinTheta,
+            uy * ux * one__cosTheta + uz * sinTheta,
+            uy * uy * one__cosTheta + cosTheta,
+            uy * uz * one__cosTheta - ux * sinTheta,
+            uz * ux * one__cosTheta - uy * sinTheta,
+            uz * uy * one__cosTheta + ux * sinTheta,
+            uz * uz * one__cosTheta + cosTheta
+        ])
+    stepRadians = radiansAround / stepCount
+    countUp = len(lx)
+    for i in range(countUp):
+        px = lx[i]
+        pd = ld[i]
+        ox = [px[c] - rx[c] for c in range(3)]
+        side = vector.vectorRejection(ox, rAxis)
+        magSide = vector.magnitude(side)
+        if magSide > 0.0:
+            unitSide = [side[c]/magSide for c in range(3)]
+            td = vector.setMagnitude(vector.crossproduct3(rAxis, unitSide), vector.magnitude(side) * stepRadians)
+        else:
+            td = [0.0, 0.0, 0.0]
+        for step in range(stepLimit):
+            rot = rotationMatrices[step]
+            fx = [rot[0] * ox[0] + rot[1] * ox[1] + rot[2] * ox[2],
+                  rot[3] * ox[0] + rot[4] * ox[1] + rot[5] * ox[2],
+                  rot[6] * ox[0] + rot[7] * ox[1] + rot[8] * ox[2]]
+            fx = [fx[c] + rx[c] for c in range(3)]
+            nx.append(fx)
+            fd1 = [rot[0] * td[0] + rot[1] * td[1] + rot[2] * td[2],
+                   rot[3] * td[0] + rot[4] * td[1] + rot[5] * td[2],
+                   rot[6] * td[0] + rot[7] * td[1] + rot[8] * td[2]]
+            nd1.append(fd1)
+            fd2 = [rot[0] * pd[0] + rot[1] * pd[1] + rot[2] * pd[2],
+                   rot[3] * pd[0] + rot[4] * pd[1] + rot[5] * pd[2],
+                   rot[6] * pd[0] + rot[7] * pd[1] + rot[8] * pd[2]]
+            nd2.append(fd2)
+    return nx, nd1, nd2
+
+
 def createEllipsoidPoints(centre, poleAxis, sideAxis, elementsCountAround, elementsCountUp, height):
-    '''
+    """
     Generate a set of points and derivatives for circle of revolution of an ellipse
     starting at pole poleAxis from centre.
     :param centre: Centre of full ellipsoid.
     :param poleAxis: Vector in direction of starting pole, magnitude is ellipse axis length.
     :param sideAxis: Vector normal to poleAxis, magnitude is ellipse side axis length.
+    :param elementsCountAround: Number of elements around pole.
+    :param elementsCountUp: Number of elements from pole to pole (half number around).
     :param height: Height of arc of ellipsoid from starting pole along poleAxis.
     :return: Lists nx, nd1, nd2. Ordered fastest around, starting at pole. Suitable for passing to TrackSurface.
-    '''
-    nx  = []
+    """
+    nx = []
     nd1 = []
     nd2 = []
     magPoleAxis = vector.magnitude(poleAxis)
@@ -221,7 +392,8 @@ def createEllipsoidPoints(centre, poleAxis, sideAxis, elementsCountAround, eleme
     unitSideAxis1 = vector.normalise(sideAxis)
     unitSideAxis2 = vector.normalise(vector.crossproduct3(sideAxis, poleAxis))
     useHeight = min(max(0.0, height), 2.0*magPoleAxis)
-    totalRadiansUp = getEllipseRadiansToX(magPoleAxis, 0.0, magPoleAxis - useHeight, initialTheta = 0.5*math.pi*useHeight/magPoleAxis)
+    totalRadiansUp = getEllipseRadiansToX(magPoleAxis, 0.0, magPoleAxis - useHeight,
+                                          initialTheta=0.5*math.pi*useHeight/magPoleAxis)
     radiansUp = 0.0
     lengthUp = getEllipseArcLength(magPoleAxis, magSideAxis, radiansUp, totalRadiansUp)
     elementLengthUp = lengthUp/elementsCountUp
@@ -230,16 +402,19 @@ def createEllipsoidPoints(centre, poleAxis, sideAxis, elementsCountAround, eleme
         cosRadiansUp = math.cos(radiansUp)
         sinRadiansUp = math.sin(radiansUp)
         radius = sinRadiansUp*magSideAxis
-        d2r, d2z = vector.setMagnitude([ cosRadiansUp*magSideAxis, sinRadiansUp*magPoleAxis ], elementLengthUp)
-        cx = [ (centre[c] + cosRadiansUp*poleAxis[c]) for c in range(3) ]
+        d2r, d2z = vector.setMagnitude([cosRadiansUp*magSideAxis, sinRadiansUp*magPoleAxis], elementLengthUp)
+        cx = [(centre[c] + cosRadiansUp*poleAxis[c]) for c in range(3)]
         elementLengthAround = radius*radiansPerElementAround
         radiansAround = 0.0
         for n in range(elementsCountAround):
             cosRadiansAround = math.cos(radiansAround)
             sinRadiansAround = math.sin(radiansAround)
-            nx .append([ (cx[c] + radius*(cosRadiansAround*unitSideAxis1[c] + sinRadiansAround*unitSideAxis2[c])) for c in range(3) ])
-            nd1.append([ (elementLengthAround*(-sinRadiansAround*unitSideAxis1[c] + cosRadiansAround*unitSideAxis2[c])) for c in range(3) ])
-            nd2.append([ (d2r*(cosRadiansAround*unitSideAxis1[c] + sinRadiansAround*unitSideAxis2[c]) - d2z*unitPoleAxis[c]) for c in range(3) ])
+            nx .append([(cx[c] + radius*(cosRadiansAround*unitSideAxis1[c] + sinRadiansAround*unitSideAxis2[c]))
+                        for c in range(3)])
+            nd1.append([(elementLengthAround*(-sinRadiansAround*unitSideAxis1[c] + cosRadiansAround*unitSideAxis2[c]))
+                        for c in range(3)])
+            nd2.append([d2r*(cosRadiansAround*unitSideAxis1[c] + sinRadiansAround*unitSideAxis2[c]) -
+                        d2z*unitPoleAxis[c] for c in range(3)])
             radiansAround += radiansPerElementAround
         radiansUp = updateEllipseAngleByArcLength(magPoleAxis, magSideAxis, radiansUp, elementLengthUp)
     return nx, nd1, nd2
@@ -407,8 +582,8 @@ def getEllipsoidPlaneA(a: float, b: float, c: float, midx, majorx):
     return centre, majorAxis, minorAxis
 
 
-def getCircleProjectionAxes(ax, ad1, ad2, ad3, length, angle1radians, angle2radians, angle3radians = None):
-    '''
+def getCircleProjectionAxes(ax, ad1, ad2, ad3, length, angle1radians, angle2radians, angle3radians=None):
+    """
     Project coordinates and orthogonal unit axes ax, ad1, ad2, ad3 by length in
     direction of ad3, rotated towards ad1 by angle1radians and ad2 by
     angle2radians such that it conforms to a circular arc of the given length,
@@ -418,9 +593,9 @@ def getCircleProjectionAxes(ax, ad1, ad2, ad3, length, angle1radians, angle2radi
     Note: not robust for all inputs.
     :param angle3radians: Optional final rotation of projection axes about bd3.
     :return: Final coordinates and orthogonal unit axes: bx, bd1, bd2, bd3
-    '''
+    """
     if (math.fabs(angle1radians) < 0.000001) and (math.fabs(angle2radians) < 0.000001):
-        bx = [ (ax[c] + length*ad3[c]) for c in range(3) ]
+        bx = [(ax[c] + length*ad3[c]) for c in range(3)]
         bd1 = copy.deepcopy(ad1)
         bd2 = copy.deepcopy(ad2)
         bd3 = copy.deepcopy(ad3)
@@ -440,18 +615,20 @@ def getCircleProjectionAxes(ax, ad1, ad2, ad3, length, angle1radians, angle2radi
         w1 = br*math.cos(angleAroundRadians)  # f1/fh
         w2 = br*math.sin(angleAroundRadians)  # f2/fh
         w3 = arcRadius*math.sin(arcAngleRadians)
-        bx = [ (ax[c] + w1*ad1[c] + w2*ad2[c] + w3*ad3[c]) for c in range(3) ]
-        bd3 = vector.normalise([ (f1*ad1[c] + f2*ad2[c] + f3*ad3[c]) for c in range(3) ])
+        bx = [(ax[c] + w1*ad1[c] + w2*ad2[c] + w3*ad3[c]) for c in range(3)]
+        bd3 = vector.normalise([(f1*ad1[c] + f2*ad2[c] + f3*ad3[c]) for c in range(3)])
         bd1 = vector.normalise(vector.crossproduct3(ad2, bd3))
         bd2 = vector.crossproduct3(bd3, bd1)
     if angle3radians:
         cosAngle3 = math.cos(angle3radians)
         sinAngle3 = math.sin(angle3radians)
-        bd1, bd2 = [ (cosAngle3*bd1[c] + sinAngle3*bd2[c]) for c in range(3) ], [ (cosAngle3*bd2[c] - sinAngle3*bd1[c]) for c in range(3) ]
+        bd1 = [(cosAngle3*bd1[c] + sinAngle3*bd2[c]) for c in range(3)]
+        bd2 = [(cosAngle3*bd2[c] - sinAngle3*bd1[c]) for c in range(3)]
     return bx, bd1, bd2, bd3
 
+
 def getSurfaceProjectionAxes(ax, ad1, ad2, ad3, angle1radians, angle2radians, length):
-    '''
+    """
     Project coordinates and orthogonal unit axes ax, ad1, ad2, ad3 in direction
     of ad3, rotated towards ad1 by angle1radians and ad2 by angle2radians by
     simple rotation.
@@ -459,7 +636,7 @@ def getSurfaceProjectionAxes(ax, ad1, ad2, ad3, angle1radians, angle2radians, le
     Assumes angles are not large e.g. less than 90 degrees.
     Note: not robust for all inputs.
     :return: Final coordinates and orthogonal unit axes: bx, bd1, bd2, bd3
-    '''
+    """
     cosAngle1 = math.cos(angle1radians)
     sinAngle1 = math.sin(angle1radians)
     cosAngle2 = math.cos(angle2radians)
@@ -472,46 +649,3 @@ def getSurfaceProjectionAxes(ax, ad1, ad2, ad3, angle1radians, angle2radians, le
     bd1 = vector.crossproduct3(ad2, bd3)
     bd2 = vector.crossproduct3(bd3, bd1)
     return bx, bd1, bd2, bd3
-
-def createEllipsePoints(cx, radian, axis1, axis2, elementsCountAround, startRadians = 0.0):
-    '''
-    Create ellipse points centred at cx, from axis1 around through axis2.
-    Assumes axis1 and axis2 are orthogonal.
-    :param cx: centre
-    :param radian: Part of ellipse to be created based on radian (will be 2*math.pi for a complete ellipse).
-    :param axis1: Vector from cx to inside at zero angle
-    :param axis2: Vector from cx to inside at 90 degree angle.
-    :param elementsCountAround: Number of elements around.
-    :param startRadians: Angle from axis1 to start creating the ellipse.
-    :return: lists px, pd1
-    '''
-    px = []
-    pd1 = []
-    magAxis1 = vector.magnitude(axis1)
-    magAxis2 = vector.magnitude(axis2)
-    totalEllipsePerimeter = getApproximateEllipsePerimeter(magAxis1, magAxis2)
-    partOfEllipsePerimeter = radian * totalEllipsePerimeter / (2 * math.pi)
-    elementLength = partOfEllipsePerimeter / elementsCountAround
-    if radian != 2 * math.pi:
-        elementsCountAround = elementsCountAround + 1
-
-    unitSideAxis1 = vector.normalise(axis1)
-    unitSideAxis2 = vector.normalise(axis2)
-    for n in range(elementsCountAround):
-        angle = startRadians
-        arcLength = n * elementLength
-        newAngle = updateEllipseAngleByArcLength(magAxis1, magAxis2, angle, arcLength)
-        cosRadiansAround = math.cos(newAngle)
-        sinRadiansAround = math.sin(newAngle)
-        x = [
-            cx[0] + cosRadiansAround * axis1[0] - sinRadiansAround * axis2[0],
-            cx[1] + cosRadiansAround * axis1[1] + sinRadiansAround * axis2[1],
-            cx[2] + cosRadiansAround * axis1[2] + sinRadiansAround * axis2[2]
-        ]
-        px.append(x)
-        rd1 = [magAxis1 * (-sinRadiansAround * unitSideAxis1[c]) + magAxis2 * (cosRadiansAround * unitSideAxis2[c]) for c in range(3)]
-        rd1Norm = vector.normalise(rd1)
-        pd1.append([elementLength * (rd1Norm[c])for c in range(3)])
-
-    return px, pd1
-

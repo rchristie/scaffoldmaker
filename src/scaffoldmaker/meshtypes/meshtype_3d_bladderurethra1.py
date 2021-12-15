@@ -704,8 +704,8 @@ class MeshType_3d_bladderurethra1(Scaffold_base):
         # Create the body part
         b = R1_max
         a = bladderLength / 2
-        xLoop, d2Loop = createEllipsePoints([0.0, 0.0, a], math.pi - neckAngleRadians, [0.0, 0.0, a], [0.0, b, 0.0],
-                                            elementsCountAlongBladder, startRadians=math.pi)
+        xLoop, d2Loop = createEllipsePoints([0.0, 0.0, a], [0.0, 0.0, a], [0.0, b, 0.0], elementsCountAlongBladder,
+                                            math.pi - neckAngleRadians, startRadians=math.pi)
         d1Loop = [0, 0, 0] * len(xLoop)
         nodesAlongMax_x = []
         nodesAlongMax_d1 = []
@@ -734,8 +734,8 @@ class MeshType_3d_bladderurethra1(Scaffold_base):
         # Create the body part
         a = bladderLength / 2
         b = R1_min
-        xLoop, d2Loop = createEllipsePoints([0.0, 0.0, a], math.pi - neckAngleRadians, [0.0, 0.0, a], [0.0, b, 0.0],
-                                            elementsCountAlongBladder, startRadians=math.pi)
+        xLoop, d2Loop = createEllipsePoints([0.0, 0.0, a], [0.0, 0.0, a], [0.0, b, 0.0], elementsCountAlongBladder,
+                                            math.pi - neckAngleRadians, startRadians=math.pi)
         d1Loop = [0, 0, 0] * len(xLoop)
         nodesAlongMin_x = []
         nodesAlongMin_d1 = []
@@ -766,9 +766,9 @@ class MeshType_3d_bladderurethra1(Scaffold_base):
         nd1 = matrix.rotateAboutZAxis(nd2_max[0], 0.5 * math.pi)
         innerNodes_d1 += [nd1] * elementsCountAround
         for n1 in range(0, len(nx_max)):
-            xAround, d1Around = createEllipsePoints([0.0, 0.0, nx_max[n1][2]], 2 * math.pi, [nx_max[n1][1], 0.0, 0.0],
+            xAround, d1Around = createEllipsePoints([0.0, 0.0, nx_max[n1][2]], [nx_max[n1][1], 0.0, 0.0],
                                                     [0.0, nx_min[n1][1], 0.0], elementsCountAround,
-                                                    startRadians=-math.pi/2)
+                                                    2 * math.pi, startRadians=-math.pi/2, loop=True)
             innerNodes_x += xAround
             if n1 >= 1:
                 innerNodes_d1 += d1Around

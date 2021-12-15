@@ -71,8 +71,9 @@ class StomachScaffoldTestCase(unittest.TestCase):
         coordinates = fieldmodule.findFieldByName("coordinates").castFiniteElement()
         self.assertTrue(coordinates.isValid())
         minimums, maximums = evaluateFieldNodesetRange(coordinates, nodes)
-        assertAlmostEqualList(self, minimums, [-18.238549598577396, -16.033751319943754, -8.905924748773598], 1.0E-6)
-        assertAlmostEqualList(self, maximums, [18.285156743233415, 15.214807824088728, 8.905433142848109], 1.0E-6)
+
+        assertAlmostEqualList(self, minimums, [-18.238549586499975, -16.033751319943754, -8.905903350670599], 1.0E-6)
+        assertAlmostEqualList(self, maximums, [18.285156539607417, 15.2148084732762, 8.905429696088424], 1.0E-6)
 
         with ChangeManager(fieldmodule):
             one = fieldmodule.createFieldConstant(1.0)
@@ -84,10 +85,10 @@ class StomachScaffoldTestCase(unittest.TestCase):
         fieldcache = fieldmodule.createFieldcache()
         result, surfaceArea = surfaceAreaField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 2557.832902256128, delta=1.0E-6)
+        self.assertAlmostEqual(surfaceArea, 2557.8323839181826, delta=1.0E-4)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(volume, 809.0349219398828, delta=1.0E-6)
+        self.assertAlmostEqual(volume, 809.0348932405994, delta=1.0E-4)
 
         # check some annotationGroups:
         expectedSizes3d = {
