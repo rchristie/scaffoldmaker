@@ -190,10 +190,12 @@ class ScaffoldPackage:
                 [ 0.0, 0.0, 0.0, 1.0 ] ]
         return None
 
-    def applyTransformation(self):
+    def applyTransformation(self, applyTransformationGroupName=None):
         '''
         If rotation, scale or transformation are set, transform node coordinates.
         Only call after generate().
+        :param applyTransformationGroupName: Optional name of group containing all nodes to be transformed, used where
+        scaffold is created as a subassembly of a larger model. If not supplied, all nodes are transformed.
         :return: True if a non-identity transformation has been applied, False if not.
         '''
         assert self._region
@@ -223,17 +225,25 @@ class ScaffoldPackage:
             doApply = newCoordinates is not coordinates
             if doApply:
                 fieldassignment = coordinates.createFieldassignment(newCoordinates)
+                if applyTransformationGroupName:
+                    group = fieldmodule.findFieldByName(applyTransformationGroupName).castGroup()
+                    assert group.isValid(), "No group named " + applyTransformationGroupName + " to transform"
+                    nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+                    nodeset = group.getFieldNodeGroup(nodes).getNodesetGroup()
+                    fieldassignment.setNodeset(nodeset)
                 fieldassignment.assign()
                 del fieldassignment
             del newCoordinates
             del coordinates
         return doApply
 
-    def generate(self, region, applyTransformation=True):
+    def generate(self, region, applyTransformation=True, applyTransformationGroupName=None):
         '''
         Generate the finite element scaffold and define annotation groups.
         :param applyTransformation: If True (default) apply scale, rotation and translation to
         node coordinates. Specify False if client will transform, e.g. with graphics transformations.
+        :param applyTransformationGroupName: Optional name of group containing all nodes to be transformed, used where
+        scaffold is created as a subassembly of a larger model. If not supplied, all nodes are transformed.
         '''
         self._region = region
         with ChangeManager(region.getFieldmodule()):
@@ -251,7 +261,7 @@ class ScaffoldPackage:
             self._userAnnotationGroups = [ AnnotationGroup.fromDict(dct, self._region) for dct in self._userAnnotationGroupsDict ]
             self._isGenerated = True
             if applyTransformation:
-                self.applyTransformation()
+                self.applyTransformation(applyTransformationGroupName)
 
     def getNextNodeIdentifier(self):
         """

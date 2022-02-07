@@ -10,10 +10,13 @@ import math
 
 from opencmiss.maths.vectorops import eulerToRotationMatrix3
 from opencmiss.utils.zinc.field import findOrCreateFieldCoordinates
+from opencmiss.utils.zinc.finiteelement import getMaximumElementIdentifier, getMaximumNodeIdentifier
 from opencmiss.utils.zinc.general import ChangeManager
 from opencmiss.zinc.element import Element
 from opencmiss.zinc.field import Field
 from opencmiss.zinc.node import Node
+from scaffoldmaker.annotation.annotationgroup import AnnotationGroup
+from scaffoldmaker.annotation.heart_terms import get_heart_term
 from scaffoldmaker.meshtypes.scaffold_base import Scaffold_base
 from scaffoldmaker.utils import vector
 from scaffoldmaker.utils.eft_utils import setEftScaleFactorIds
@@ -36,34 +39,36 @@ class MeshType_3d_heartarterialvalve1(Scaffold_base):
     @staticmethod
     def getDefaultOptions(parameterSetName='Default'):
         return {
-            'Unit scale' : 1.0,
-            'Inner diameter' : 1.0,
-            'Inner radial displacement' : 0.0,
-            'Inner sinus radial displacement' : 0.05,
-            'Outer angle degrees' : 0.0,
-            'Outer height' : 0.5,
-            'Outer radial displacement' : 0.05,
-            'Outer sinus radial displacement' : 0.15,
-            'Outlet length' : 0.5,
-            'Rotation azimuth degrees' : 0.0,
-            'Rotation elevation degrees' : 0.0,
-            'Rotation roll degrees' : 0.0,
-            'Sinus angle degrees' : 35.0,
-            'Sinus depth' : 0.2,
-            'Translation x' : 0.0,
-            'Translation y' : 0.0,
-            'Translation z' : 0.0,
-            'Wall thickness' : 0.05,
-            'Refine' : False,
-            'Refine number of elements surface' : 4,
-            'Refine number of elements through wall' : 1,
-            'Use cross derivatives' : False
+            'Unit scale': 1.0,
+            'Aortic': True,
+            'Inner diameter': 1.0,
+            'Inner radial displacement': 0.0,
+            'Inner sinus radial displacement': 0.05,
+            'Outer angle degrees': 0.0,
+            'Outer height': 0.5,
+            'Outer radial displacement': 0.05,
+            'Outer sinus radial displacement': 0.15,
+            'Outlet length': 0.5,
+            'Rotation azimuth degrees': 0.0,
+            'Rotation elevation degrees': 0.0,
+            'Rotation roll degrees': 0.0,
+            'Sinus angle degrees': 35.0,
+            'Sinus depth': 0.2,
+            'Translation x': 0.0,
+            'Translation y': 0.0,
+            'Translation z': 0.0,
+            'Wall thickness': 0.05,
+            'Refine': False,
+            'Refine number of elements surface': 4,
+            'Refine number of elements through wall': 1,
+            'Use cross derivatives': False
         }
 
     @staticmethod
     def getOrderedOptionNames():
         return [
             'Unit scale',
+            'Aortic',
             'Inner diameter',
             'Inner radial displacement',
             'Inner sinus radial displacement',
@@ -117,8 +122,9 @@ class MeshType_3d_heartarterialvalve1(Scaffold_base):
         :return: x, d1, d2, d3 all indexed by [n3=wall][n2=inlet->outlet][n1=around] where
         d1 is around, d2 is in direction inlet->outlet.
         d3 is radial and undefined at n2 == 1.
-         """
+        """
         unitScale = options['Unit scale']
+        aortic = options['Aortic']
         innerRadius = unitScale*0.5*options['Inner diameter']
         innerRadialDisplacement = unitScale*options['Inner radial displacement']
         innerSinusRadialDisplacement = unitScale*options['Inner sinus radial displacement']
@@ -266,7 +272,7 @@ class MeshType_3d_heartarterialvalve1(Scaffold_base):
 
 
     @classmethod
-    def generateNodes(cls, fieldmodule, coordinates, x, d1, d2, d3, startNodeIdentifier = 1):
+    def generateNodes(cls, fieldmodule, coordinates, x, d1, d2, d3, startNodeIdentifier=None):
         """
         Create valve nodes from point coordinates.
         :param fieldmodule: Zinc fieldmodule to create nodes in.
@@ -274,14 +280,16 @@ class MeshType_3d_heartarterialvalve1(Scaffold_base):
         :param x, d1, d2, d3: Point coordinates and derivatives returned by getPoints().
         All indexed by [n3=wall][n2=inlet->outlet][n1=around] where d1 is around,
         d2 is in direction inlet->outlet. All d3 at n2==1 are None.
-        :param startNodeIdentifier: First node identifier to use.
+        :param startNodeIdentifier: First node identifier to use, or None to start after highest current identifier
+        or 1 if none.
         :return: next nodeIdentifier, nodeId[n3][n2][n1].
-         """
-        nodeIdentifier = startNodeIdentifier
+        """
         nodeId = [ [ [], [] ], [ [], [] ] ]
         elementsCountAround = 6  # fixed
 
         nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+        nodeIdentifier = startNodeIdentifier if startNodeIdentifier else \
+            max(1, getMaximumNodeIdentifier(nodes) + 1)
         nodetemplateInlet = nodes.createNodetemplate()
         nodetemplateInlet.defineField(coordinates)
         nodetemplateInlet.setValueNumberOfVersions(coordinates, -1, Node.VALUE_LABEL_VALUE, 1)
@@ -314,22 +322,29 @@ class MeshType_3d_heartarterialvalve1(Scaffold_base):
 
 
     @classmethod
-    def generateElements(cls, fieldmodule, coordinates, nodeId, startElementIdentifier = 1):
+    def generateElements(cls, fieldmodule, coordinates, nodeId, options, startElementIdentifier=None):
         """
         Create valve elements from nodes.
         :param fieldmodule: Zinc fieldmodule to create elements in.
         :param coordinates: Coordinate field to define.
         :param nodeId: Node identifiers returned by generateNodes().
         Indexed by [n3=wall][n2=inlet->outlet][n1=around].
-        :param startElementIdentifier: First element identifier to use.
-        :return: next elementIdentifier, elementId[e1].
-         """
-        elementIdentifier = startElementIdentifier
+        :param startElementIdentifier: First element identifier to use, or None to start after highest current
+        identifier or 1 if none.
+        :return: annotationGroups, next elementIdentifier, elementId[e1].
+        """
+        aortic = options["Aortic"]
+        rootTerm = get_heart_term("root of aorta" if aortic else "root of pulmonary trunk")
+        rootGroup = AnnotationGroup(fieldmodule.getRegion(), rootTerm)
+        annotationGroups = [rootGroup]
+
         elementId = []
         elementsCountAround = 6  # fixed
         useCrossDerivatives = False
 
         mesh = fieldmodule.findMeshByDimension(3)
+        elementIdentifier = startElementIdentifier if startElementIdentifier else \
+            max(1, getMaximumElementIdentifier(mesh) + 1)
         tricubichermite = eftfactory_tricubichermite(mesh, useCrossDerivatives)
         eft = tricubichermite.createEftNoCrossDerivatives()
         setEftScaleFactorIds(eft, [1], [])
@@ -341,6 +356,8 @@ class MeshType_3d_heartarterialvalve1(Scaffold_base):
         elementtemplate.setElementShapeType(Element.SHAPE_TYPE_CUBE)
         elementtemplate.defineField(coordinates, -1, eft)
 
+        rootMeshGroup = rootGroup.getMeshGroup(mesh)
+
         for ea in range(elementsCountAround):
             eb = (ea + 1) % elementsCountAround
             nids = [ nodeId[0][0][ea], nodeId[0][0][eb], nodeId[0][1][ea], nodeId[0][1][eb],
@@ -351,7 +368,9 @@ class MeshType_3d_heartarterialvalve1(Scaffold_base):
             elementId.append(elementIdentifier)
             elementIdentifier += 1
 
-        return elementIdentifier, elementId
+            rootMeshGroup.addElement(element)
+
+        return annotationGroups, elementIdentifier, elementId
 
     @classmethod
     def generateBaseMesh(cls, region, options):
@@ -361,14 +380,14 @@ class MeshType_3d_heartarterialvalve1(Scaffold_base):
         :param region: Zinc region to define model in. Must be empty.
         :param options: Dict containing options. See getDefaultOptions().
         :return: list of AnnotationGroup
-         """
+        """
         fieldmodule = region.getFieldmodule()
         with ChangeManager(fieldmodule):
             coordinates = findOrCreateFieldCoordinates(fieldmodule)
             x, d1, d2, d3 = cls.getPoints(options)
             nodeId = cls.generateNodes(fieldmodule, coordinates, x, d1, d2, d3)[1]
-            cls.generateElements(fieldmodule, coordinates, nodeId)[0]
-        return []  # annotationGroups
+            annotationGroups = cls.generateElements(fieldmodule, coordinates, nodeId, options)[0]
+        return annotationGroups
     
     @classmethod
     def refineMesh(cls, meshrefinement, options):

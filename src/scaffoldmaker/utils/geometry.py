@@ -247,7 +247,7 @@ def createEllipsePoints(cx, axis1, axis2, elementsCountAround, radiansAround=2.0
     return px, pd1
 
 
-def createOvalPoints(cx, axis1, axis2, lengthAxis1b, elementsCountAround, radiansAround=2.0*math.pi, startRadians=0.0,
+def createOvalPoints(cx, axis1, axis2, lengthAxis1b, elementsCountAround, startRadians=0.0, endRadians=2.0*math.pi,
                      loop=False):
     """
     Create points around an oval consisting of 2 half ellipses with a common axis2.
@@ -258,8 +258,9 @@ def createOvalPoints(cx, axis1, axis2, lengthAxis1b, elementsCountAround, radian
     :param axis2: Vector from cx to axis at 90 degree angle.
     :param lengthAxis1b: Length of axis1b opposite axis1. Axis 1 is mirrored and set to this magnitude.
     :param elementsCountAround: Number of elements around.
-    :param radiansAround: Proportion of ellipse to be created in radians. Default 2*math.pi is a complete ellipse.
-    :param startRadians: Angle from axis1 to start creating the ellipse.
+    :param startRadians: Angle from axis1 to start creating oval from. Default 0.0.
+    :param endRadians: Angle from axis1 to end creating oval from, must be greater than startRadians.
+    Default 2*math.pi is a complete loop if starting at 0.0.
     :param loop: Set True to not evaluate last row of points, where should be same as first.
     :return: lists px, pd1
     """
@@ -267,9 +268,12 @@ def createOvalPoints(cx, axis1, axis2, lengthAxis1b, elementsCountAround, radian
     pd1 = []
     magAxis1 = vector.magnitude(axis1)
     magAxis2 = vector.magnitude(axis2)
-    totalPerimeter = 0.5*(getApproximateEllipsePerimeter(magAxis1, magAxis2) +
-                          getApproximateEllipsePerimeter(lengthAxis1b, magAxis2))
-    partPerimeter = totalPerimeter * radiansAround / (2 * math.pi)
+    if startRadians == 0.0:
+        totalPerimeter = 0.5*(getApproximateEllipsePerimeter(magAxis1, magAxis2) +
+                              getApproximateEllipsePerimeter(lengthAxis1b, magAxis2))
+        partPerimeter = totalPerimeter * endRadians / (2 * math.pi)
+    else:
+        partPerimeter = getEllipseArcLength(magAxis1, magAxis2, startRadians, endRadians)
     elementLength = partPerimeter / elementsCountAround
     pointsCountAround = elementsCountAround if loop else elementsCountAround + 1
     axis1b = vector.setMagnitude(axis1, lengthAxis1b)
@@ -290,7 +294,7 @@ def createOvalPoints(cx, axis1, axis2, lengthAxis1b, elementsCountAround, radian
                     angleRadians = updateEllipseAngleByArcLength(
                         newMagAxis1, magAxis2, boundaryRadians, elementLength - boundaryArcLength)
             else:
-                angleRadians = startRadians + radiansAround
+                angleRadians = endRadians
         cosRadiansAround = math.cos(angleRadians)
         sinRadiansAround = math.sin(angleRadians)
         useAxis1 = axis1 if cosRadiansAround > 0.0 else axis1b

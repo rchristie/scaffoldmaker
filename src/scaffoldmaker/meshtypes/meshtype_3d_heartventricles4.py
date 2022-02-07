@@ -5,6 +5,7 @@ Variant using collapsed/wedge elements at septum junction.
 
 from __future__ import division
 
+import copy
 import math
 
 from opencmiss.utils.zinc.field import findOrCreateFieldCoordinates, findOrCreateFieldGroup, \
@@ -17,6 +18,8 @@ from scaffoldmaker.annotation.annotationgroup import AnnotationGroup, findOrCrea
     getAnnotationGroupForTerm
 from scaffoldmaker.annotation.heart_terms import get_heart_term
 from scaffoldmaker.meshtypes.scaffold_base import Scaffold_base
+from scaffoldmaker.meshtypes.meshtype_3d_heartarterialvalve1 import MeshType_3d_heartarterialvalve1
+from scaffoldmaker.scaffoldpackage import ScaffoldPackage
 from scaffoldmaker.utils import vector
 from scaffoldmaker.utils.eft_utils import remapEftNodeValueLabel, scaleEftNodeValueLabels, setEftScaleFactorIds
 from scaffoldmaker.utils.eftfactory_tricubichermite import eftfactory_tricubichermite
@@ -33,6 +36,54 @@ class MeshType_3d_heartventricles4(Scaffold_base):
     '''
     Generates 3-D mesh of left and right ventricles below base plane.
     '''
+
+    aorticValveScaffoldPackages = {
+        'Default': ScaffoldPackage(MeshType_3d_heartarterialvalve1, {
+            "rotation": [
+                -57.72653173945659,
+                23.58767177749982,
+                -53.92153341257814
+            ],
+            "scaffoldSettings": {
+                "Aortic": True,
+                "Unit scale": 1.0
+            },
+            "scale": [
+                0.32081136767341234,
+                0.32081136767341234,
+                0.32081136767341234
+            ],
+            "translation": [
+                0.37126060633565033,
+                0.02270168116977539,
+                0.3383611041722241
+            ]
+        })
+    }
+
+    pulmonaryValveScaffoldPackages = {
+        'Default': ScaffoldPackage(MeshType_3d_heartarterialvalve1, {
+            "rotation": [
+                -107.85511693928716,
+                -31.783010651356427,
+                36.72725991251207
+            ],
+            "scaffoldSettings": {
+                "Aortic": False,
+                "Unit scale": 1.0
+            },
+            "scale": [
+                0.32808107762445043,
+                0.32808107762445043,
+                0.32808107762445043
+            ],
+            "translation": [
+                0.5355497803403053,
+                0.47349205354281565,
+                0.189827294742602
+            ]
+        })
+    }
 
     @classmethod
     def getName(cls):
@@ -69,20 +120,26 @@ class MeshType_3d_heartventricles4(Scaffold_base):
         # N = L - 2A = 8
         # M = 2U - N = 6 (require 
         options['Unit scale'] = 1.0
+        aorticValveOption = cls.aorticValveScaffoldPackages['Default']
+        options['Aortic valve'] = copy.deepcopy(aorticValveOption)
+        pulmonaryValveOption = cls.pulmonaryValveScaffoldPackages['Default']
+        options['Pulmonary valve'] = copy.deepcopy(pulmonaryValveOption)
         options['Interventricular septum thickness'] = 0.12
-        options['Interventricular sulcus apex transition length'] = 0.2
-        options['Interventricular sulcus base transition length'] = 0.15
         options['LV apex thickness'] = 0.08
         options['LV axis apex height'] = 1.0
         options['LV axis base height'] = 0.5
-        options['LV outer height'] = 1.0
-        options['LV outer diameter'] = 1.0
         options['LV free wall thickness'] = 0.15
-        options['RV apex relative coordinates'] = [0.6, -0.6, -0.8]
+        options['LV outer diameter'] = 1.0
+        options['RV axis'] = [0.0, 0.0, 1.0]
+        options['RV axis apex height'] = 0.8
+        options['RV axis base height'] = 0.5
+        options['RV construction apex'] = [0.2, -0.2, -0.9]
         options['RV free wall thickness'] = 0.05
-        options['RV relative height'] = 0.8
-        options['RV relative radius'] = 0.5
-        options['RV rotation axis'] = [0.0, 0.0, 1.0]
+        options['RV outer diameter'] = 1.1
+        options['RV shear xz'] = 0.3
+        options['RV shear yz'] = 0.2
+        options['RV taper'] = 0.4
+        options['RV tilt degrees'] = 0.0
 
         #options['Use cross derivatives'] = False  # Removed from interface until working
         options['Refine'] = False
@@ -115,25 +172,66 @@ class MeshType_3d_heartventricles4(Scaffold_base):
             'Number of elements up LV free wall',
             'Number of elements up LV apex',
             'Unit scale',
+            'Aortic valve',
+            'Pulmonary valve',
             'Interventricular septum thickness',
-            'Interventricular sulcus apex transition length',
-            'Interventricular sulcus base transition length',
             'LV apex thickness',
             'LV axis apex height',
             'LV axis base height',
-            'LV outer height',
-            'LV outer diameter',
             'LV free wall thickness',
-            'RV apex relative coordinates',
+            'LV outer diameter',
+            'RV axis',
+            'RV axis apex height',
+            'RV axis base height',
+            'RV construction apex',
             'RV free wall thickness',
-            'RV relative height',
-            'RV relative radius',
-            'RV rotation axis',
+            'RV outer diameter',
+            'RV shear xz',
+            'RV shear yz',
+            'RV taper',
+            'RV tilt degrees',
             # 'Use cross derivatives',  # Removed from interface until working
             'Refine',
             'Refine number of elements surface',
             'Refine number of elements through wall'
         ]
+
+    @classmethod
+    def getOptionValidScaffoldTypes(cls, optionName):
+        if optionName in ('Aortic valve', 'Pulmonary valve'):
+            return [MeshType_3d_heartarterialvalve1]
+        return []
+
+    @classmethod
+    def getOptionScaffoldTypeParameterSetNames(cls, optionName, scaffoldType):
+        if optionName == 'Aortic valve':
+            return list(cls.aorticValveScaffoldPackages.keys())
+        if optionName == 'Pulmonary valve':
+            return list(cls.pulmonaryValveScaffoldPackages.keys())
+        assert scaffoldType in cls.getOptionValidScaffoldTypes(optionName), \
+            cls.__name__ + '.getOptionScaffoldTypeParameterSetNames.  ' + \
+            'Invalid option \'' + optionName + '\' scaffold type ' + scaffoldType.getName()
+        return scaffoldType.getParameterSetNames()
+
+    @classmethod
+    def getOptionScaffoldPackage(cls, optionName, scaffoldType, parameterSetName=None):
+        '''
+        :param parameterSetName:  Name of valid parameter set for option Scaffold, or None for default.
+        :return: ScaffoldPackage.
+        '''
+        if parameterSetName:
+            assert parameterSetName in cls.getOptionScaffoldTypeParameterSetNames(optionName, scaffoldType), \
+                'Invalid parameter set ' + str(parameterSetName) + ' for scaffold ' + str(scaffoldType.getName()) + \
+                ' in option ' + str(optionName) + ' of scaffold ' + cls.getName()
+        if optionName == 'Aortic valve':
+            if not parameterSetName:
+                parameterSetName = list(cls.aorticValveScaffoldPackages.keys())[0]
+            return copy.deepcopy(cls.aorticValveScaffoldPackages[parameterSetName])
+        if optionName == 'Pulmonary valve':
+            if not parameterSetName:
+                parameterSetName = list(cls.pulmonaryValveScaffoldPackages.keys())[0]
+            return copy.deepcopy(cls.pulmonaryValveScaffoldPackages[parameterSetName])
+        assert False, cls.__name__ + '.getOptionScaffoldPackage:  Option ' + optionName + ' is not a scaffold'
 
     @classmethod
     def getElementsCounts(cls, options):
@@ -209,15 +307,15 @@ class MeshType_3d_heartventricles4(Scaffold_base):
         for key in [
             'Unit scale',
             'Interventricular septum thickness',
-            'Interventricular sulcus apex transition length',
-            'Interventricular sulcus base transition length',
             'LV apex thickness',
             'LV axis apex height',
             'LV axis base height',
-            'LV outer height',
-            'LV outer diameter',
             'LV free wall thickness',
-            'RV free wall thickness'
+            'LV outer diameter',
+            'RV axis apex height',
+            'RV axis base height',
+            'RV free wall thickness',
+            'RV outer diameter'
             ]:
             if options[key] < 0.0:
                 options[key] = 0.0
@@ -228,19 +326,21 @@ class MeshType_3d_heartventricles4(Scaffold_base):
         #     elif options[key] > 0.99:
         #         options[key] = 0.99
         for key in [
-                'RV apex relative coordinates',
-                'RV rotation axis']:
+                'RV axis',
+                'RV construction apex']:
             if len(options[key]) != 3:
                 if len(options[key]) > 3:
                     options[key] = options[key][:3]
                 else:
                     while len(options[key]) != 3:
                         options[key].append(0.0)
-        mag = vector.magnitude(options['RV rotation axis'])
+        mag = vector.magnitude(options['RV axis'])
         if mag < 0.00001:
-            options['RV rotation axis'] = [0.0, 0.0, 1.0]
-        elif not (0.99999 < mag < 1.00001):
-            options['RV rotation axis'] = vector.setMagnitude(options['RV rotation axis'], 1.0)
+            options['RV axis'] = [0.0, 0.0, 1.0]
+        if options['RV tilt degrees'] < 0.0:
+            options['RV tilt degrees'] = 0.0
+        elif options['RV tilt degrees'] > 44.999:
+            options['RV tilt degrees'] = 44.999
         return dependentChanges
 
     @classmethod
@@ -256,20 +356,25 @@ class MeshType_3d_heartventricles4(Scaffold_base):
             elementsCountAroundLVFreeWall, elementsCountUpLVFreeWall, \
             elementsCountAroundRVFreeWall, elementsCountUpRVFreeWall = cls.getElementsCounts(options)
         unitScale = options['Unit scale']
+        aorticValve = options['Aortic valve']
+        pulmonaryValve = options['Pulmonary valve']
         ivSeptumThickness = unitScale*options['Interventricular septum thickness']
-        ivSulcusApexTransitionLength = options['Interventricular sulcus apex transition length']
-        ivSulcusBaseTransitionLength = options['Interventricular sulcus base transition length']
         lvApexThickness = unitScale*options['LV apex thickness']
         lvAxisApexHeight = unitScale*options['LV axis apex height']
         lvAxisBaseHeight = unitScale*options['LV axis base height']
-        lvOuterHeight = unitScale*options['LV outer height']
-        lvOuterRadius = unitScale*0.5*options['LV outer diameter']
         lvFreeWallThickness = unitScale*options['LV free wall thickness']
-        rvApexRelativeCoordinates = options['RV apex relative coordinates']
+        lvOuterRadius = unitScale*0.5*options['LV outer diameter']
+        rvAxis = vector.normalise(options['RV axis'])
+        rvAxisApexHeight = unitScale*options['RV axis apex height']
+        rvAxisBaseHeight = unitScale*options['RV axis base height']
+        rvConstructionApex = [unitScale*s for s in options['RV construction apex']]
         rvFreeWallThickness = unitScale*options['RV free wall thickness']
-        rvAxisHeight = lvAxisApexHeight * options['RV relative height']
-        rvAxisWidth = lvOuterRadius * options['RV relative radius']
-        rvRotationAxis = options['RV rotation axis']
+        rvOuterRadius = unitScale*0.5*options['RV outer diameter']
+        rvShearXZ = options['RV shear xz']
+        rvShearYZ = options['RV shear yz']
+        rvTaper = options['RV taper']
+        rvTiltRadians = math.radians(options['RV tilt degrees'])
+
         useCrossDerivatives = False  # options['Use cross derivatives']  # Removed from interface until working
 
         #print("elementsCountAroundFull", elementsCountAroundFull)
@@ -303,6 +408,12 @@ class MeshType_3d_heartventricles4(Scaffold_base):
         # Create geometry
         #################
 
+        aorticValve.generate(region, applyTransformationGroupName="root of aorta")
+        annotationGroups += aorticValve.getAnnotationGroups()
+
+        pulmonaryValve.generate(region, applyTransformationGroupName="root of pulmonary trunk")
+        annotationGroups += pulmonaryValve.getAnnotationGroups()
+
         elementsCountAroundLVTrackSurface = 16
         elementsCountUpLVTrackSurface = 8
 
@@ -311,28 +422,55 @@ class MeshType_3d_heartventricles4(Scaffold_base):
         #                                      initialTheta=0.5*math.pi*useHeight/lvAxisApexHeight)
         # baseProportionUp = 2.0*getEllipseArcLength(lvAxisApexHeight, lvOuterRadius, 0.0, baseRadiansUp) \
         #                    / getApproximateEllipsePerimeter(lvAxisApexHeight, lvOuterRadius)
-        origin = [0.0, 0.0, 0.0]
-        lx, ld = createOvalPoints(origin, [0.0, 0.0, -lvAxisApexHeight], [0.0, -lvOuterRadius, 0.0], lvAxisBaseHeight,
-                                  elementsCountUpLVTrackSurface, math.pi)
+        lvOrigin = [0.0, 0.0, 0.0]
+        lvApexAxis = [0.0, 0.0, -lvAxisApexHeight]
+        lvSideAxis = [0.0, -lvOuterRadius, 0.0]
+        lx, ld = createOvalPoints(lvOrigin, lvApexAxis, lvSideAxis, lvAxisBaseHeight,
+                                  elementsCountUpLVTrackSurface, 0.0, math.pi)
 
-        ltx, ltd1, ltd2 = revolvePoints(lx, ld, origin, [0.0, 0.0, 1.0], elementsCountAroundLVTrackSurface,
-                                        loop=True)
-
+        ltx, ltd1, ltd2 = revolvePoints(lx, ld, lvOrigin, [0.0, 0.0, 1.0], elementsCountAroundLVTrackSurface, loop=True)
         lvTrackSurface = TrackSurface(elementsCountAroundLVTrackSurface, elementsCountUpLVTrackSurface, ltx, ltd1, ltd2,
                                       loop1=True)
 
         elementsCountAroundRVTrackSurface = 16
         elementsCountUpRVTrackSurface = 8
 
-        rvApexCoordinates = [rvApexRelativeCoordinates[0] * lvOuterRadius,
-                             rvApexRelativeCoordinates[1] * lvOuterRadius,
-                             rvApexRelativeCoordinates[2] * lvAxisApexHeight]
-        centre = [rvApexCoordinates[0], rvApexCoordinates[1], rvApexCoordinates[2] + rvAxisHeight]
+        rvox, rvoy, startRadians, endRadians = \
+            determineRVTiltOval(rvAxisApexHeight, rvAxisBaseHeight, rvOuterRadius, rvTiltRadians)
 
-        rx, rd = createEllipsePoints(centre, [0.0, 0.0, -rvAxisHeight], [0.0, -rvAxisWidth, 0.0],
-                                     elementsCountUpRVTrackSurface, 1.25*math.pi)
-        rtx, rtd1, rtd2 = revolvePoints(rx, rd, rvApexCoordinates, rvRotationAxis, elementsCountAroundRVTrackSurface, \
-                                        1.25*math.pi, startRadians=-0.25*math.pi)
+        rvPost = vector.normalise(vector.crossproduct3(rvAxis, [-1.0, 0.0, 0.0]))
+        rvSide = vector.crossproduct3(rvPost, rvAxis)
+        rvOrigin = [rvConstructionApex[c] + rvox*rvAxis[c] + rvoy*rvSide[c] for c in range(3)]
+        sin_alpha = math.sin(rvTiltRadians)
+        cos_alpha = math.cos(rvTiltRadians)
+        rvApexAxis = vector.setMagnitude([cos_alpha*rvAxis[c] + sin_alpha*rvSide[c] for c in range(3)],
+                                         -rvAxisApexHeight)
+        scaledRvOuterRadius = (1.0 - rvTaper)*rvOuterRadius
+        rvSideAxis = vector.setMagnitude(vector.crossproduct3(rvApexAxis, rvPost), scaledRvOuterRadius)
+        rx, rd = createOvalPoints(rvOrigin, rvApexAxis, rvSideAxis, rvAxisBaseHeight,
+                                  elementsCountUpRVTrackSurface, startRadians, endRadians)
+
+        # taper only implemented for vertical RV axis
+        scaledRvTaper = rvTaper/(1.0 - rvTaper)/rvAxisApexHeight
+        for n in range(len(rx)):
+            x = rx[n]
+            dx = x[0] - rvConstructionApex[0]
+            dz = x[2] - rvConstructionApex[2]
+            x[0] += scaledRvTaper*dx*dz
+            d = rd[n]
+            d[0] += scaledRvTaper*(dx*d[2] + dz*d[0])
+
+        rtx, rtd1, rtd2 = revolvePoints(rx, rd, rvConstructionApex, rvAxis, elementsCountAroundRVTrackSurface)
+
+        # shear in xz, yz planes
+        for n in range((elementsCountAroundRVTrackSurface + 1)*(elementsCountUpRVTrackSurface + 1)):
+            x = rtx[n]
+            dz = x[2] - rvConstructionApex[2]
+            x[0] += rvShearXZ*dz
+            x[1] += rvShearYZ*dz
+            for d in (rtd1[n], rtd2[n]):
+                d[0] += rvShearXZ*d[2]
+                d[1] += rvShearYZ*d[2]
 
         rvTrackSurface = TrackSurface(elementsCountAroundRVTrackSurface, elementsCountUpRVTrackSurface, rtx, rtd1, rtd2)
 
@@ -506,3 +644,39 @@ class MeshType_3d_heartventricles4(Scaffold_base):
         # rvEndoGroup = findOrCreateAnnotationGroupForTerm(annotationGroups, region, get_heart_term("endocardium of right ventricle"))
         # rvEndoGroup.getMeshGroup(mesh2d).addElementsConditional(is_rv_endo)
         pass
+
+
+def determineRVTiltOval(apex_length, base_length, side_radius, alpha):
+    """
+    Calculate oval origin relative to apex at (0,0) for tilt angle alpha,
+    such that the apex point is tangential all around.
+    :param apex_length: oval ellipse axis length down to apex
+    :param base_length: ovel ellipse axis length up to base
+    :param side_radius: ovel ellipse side radius
+    :param alpha: Tilt angle in radians in [0, pi/4)
+    :return: oval origin x, oval origin y, start angle, end angle.
+    """
+    assert 0.0 <= alpha < 0.25*math.pi
+    if alpha == 0.0:
+        return apex_length, 0.0, 0.0, math.pi
+    # calculate theta = angle around ellipse to apex point
+    a = apex_length
+    b = side_radius
+    sin_alpha = math.sin(alpha)
+    cos_alpha = math.cos(alpha)
+    tan_alpha = sin_alpha/cos_alpha
+    theta = math.atan2(b*sin_alpha, a*cos_alpha)
+    sin_theta = math.sin(theta)
+    cos_theta = math.cos(theta)
+    # tan_theta = sin_theta/cos_theta
+    ay = b*sin_theta
+    ax1 = a*(1.0 - cos_theta)
+    ax2 = ay/tan_alpha
+    aa = ay/sin_alpha
+    ac = a - ax1 - ax2
+    origin_x = ax2 + ac*cos_alpha
+    origin_y = ac*sin_alpha
+    start_angle = theta
+    # GRC compute later:
+    end_angle = 1.1*math.pi
+    return origin_x, origin_y, start_angle, end_angle

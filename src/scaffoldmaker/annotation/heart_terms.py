@@ -68,10 +68,12 @@ heart_terms = [
     ("outer surface of myocardium of right atrium", "ILX:0793532"),
 
     # arterial valves and great vessels - volume terms
+    ("aortic valve", "UBERON:0002137"),
     ("root of aorta", "FMA:3740"),
     ("posterior cusp of aortic valve", "FMA:7253"),
     ("right cusp of aortic valve", "FMA:7252"),
     ("left cusp of aortic valve", "FMA:7251"),
+    ("pulmonary valve", "UBERON:0002146"),
     ("root of pulmonary trunk", "FMA:8612"),
     ("right cusp of pulmonary valve", "FMA:7250"),
     ("anterior cusp of pulmonary valve", "FMA:7249"),
