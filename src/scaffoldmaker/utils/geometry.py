@@ -308,13 +308,13 @@ def createOvalPoints(cx, axis1, axis2, lengthAxis1b, elementsCountAround, startR
     return px, pd1
 
 
-def revolvePoints(lx, ld, rx, rAxis, stepCount, radiansAround=2*math.pi, startRadians=0.0, loop=False):
+def revolvePoints(lx, ld, rCentre, rAxis, stepCount, radiansAround=2*math.pi, startRadians=0.0, loop=False):
     """
     Revolve nx, nd2 about rotation centre and compute 2D lattice of points and derivatives.
     All vectors expected to have 3 components.
     :param lx: Points up a curve.
     :param ld: Derivatives up a curve.
-    :param rx: Centre of rotation.
+    :param rCentre: Centre of rotation.
     :param rAxis: Axis of rotation. Unit vector
     :param stepCount: Number of rotation steps, one less than number of points out.
     :param radiansAround: Angle rotated in right hand sense about axis.
@@ -346,13 +346,21 @@ def revolvePoints(lx, ld, rx, rAxis, stepCount, radiansAround=2*math.pi, startRa
         ])
     stepRadians = radiansAround / stepCount
     countUp = len(lx)
+    magLimit = 0.0
+    for i in range(countUp):
+        px = lx[i]
+        ox = [px[c] - rCentre[c] for c in range(3)]
+        side = vector.vectorRejection(ox, rAxis)
+        magSide = vector.magnitude(side)
+        magLimit = max(magLimit, magSide)
+    magLimit *= 1.0E-9
     for i in range(countUp):
         px = lx[i]
         pd = ld[i]
-        ox = [px[c] - rx[c] for c in range(3)]
+        ox = [px[c] - rCentre[c] for c in range(3)]
         side = vector.vectorRejection(ox, rAxis)
         magSide = vector.magnitude(side)
-        if magSide > 0.0:
+        if magSide > magLimit:
             unitSide = [side[c]/magSide for c in range(3)]
             td = vector.setMagnitude(vector.crossproduct3(rAxis, unitSide), vector.magnitude(side) * stepRadians)
         else:
@@ -362,7 +370,7 @@ def revolvePoints(lx, ld, rx, rAxis, stepCount, radiansAround=2*math.pi, startRa
             fx = [rot[0] * ox[0] + rot[1] * ox[1] + rot[2] * ox[2],
                   rot[3] * ox[0] + rot[4] * ox[1] + rot[5] * ox[2],
                   rot[6] * ox[0] + rot[7] * ox[1] + rot[8] * ox[2]]
-            fx = [fx[c] + rx[c] for c in range(3)]
+            fx = [fx[c] + rCentre[c] for c in range(3)]
             nx.append(fx)
             fd1 = [rot[0] * td[0] + rot[1] * td[1] + rot[2] * td[2],
                    rot[3] * td[0] + rot[4] * td[1] + rot[5] * td[2],

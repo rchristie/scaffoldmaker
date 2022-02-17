@@ -40,9 +40,9 @@ class MeshType_3d_heartventricles4(Scaffold_base):
     aorticValveScaffoldPackages = {
         'Default': ScaffoldPackage(MeshType_3d_heartarterialvalve1, {
             "rotation": [
-                -57.72653173945659,
-                23.58767177749982,
-                -53.92153341257814
+                -42.280095308724924,
+                20.287890155624396,
+                -46.22275162169128
             ],
             "scaffoldSettings": {
                 "Aortic": True,
@@ -54,9 +54,9 @@ class MeshType_3d_heartventricles4(Scaffold_base):
                 0.32081136767341234
             ],
             "translation": [
-                0.37126060633565033,
-                0.02270168116977539,
-                0.3383611041722241
+                0.3053988636154118,
+                0.09929523294480957,
+                0.35979971157497675
             ]
         })
     }
@@ -64,23 +64,23 @@ class MeshType_3d_heartventricles4(Scaffold_base):
     pulmonaryValveScaffoldPackages = {
         'Default': ScaffoldPackage(MeshType_3d_heartarterialvalve1, {
             "rotation": [
-                -107.85511693928716,
-                -31.783010651356427,
-                36.72725991251207
+                -104.28829225942187,
+                -14.895463238375616,
+                39.25247517764923
             ],
             "scaffoldSettings": {
                 "Aortic": False,
                 "Unit scale": 1.0
             },
             "scale": [
-                0.32808107762445043,
-                0.32808107762445043,
-                0.32808107762445043
+                0.33536643732304455,
+                0.33536643732304455,
+                0.33536643732304455
             ],
             "translation": [
-                0.5355497803403053,
-                0.47349205354281565,
-                0.189827294742602
+                0.3942377920137325,
+                0.5283063303640532,
+                0.24241414097833633
             ]
         })
     }
@@ -125,20 +125,21 @@ class MeshType_3d_heartventricles4(Scaffold_base):
         pulmonaryValveOption = cls.pulmonaryValveScaffoldPackages['Default']
         options['Pulmonary valve'] = copy.deepcopy(pulmonaryValveOption)
         options['Interventricular septum thickness'] = 0.12
-        options['LV apex thickness'] = 0.08
+        options['LV axis'] = [-0.2, 0.0, 1.0]
         options['LV axis apex height'] = 1.0
         options['LV axis base height'] = 0.5
+        options['LV axis radius'] = 0.5
+        options['LV apex thickness'] = 0.15
         options['LV free wall thickness'] = 0.15
-        options['LV outer diameter'] = 1.0
-        options['RV axis'] = [0.0, 0.0, 1.0]
-        options['RV axis apex height'] = 0.8
+        options['RV axis origin'] = [0.6, 0.0, 0.0]
+        options['RV axis'] = [0.5, 0.1, 1.0]
+        options['RV axis apex height'] = 1.0
         options['RV axis base height'] = 0.5
-        options['RV construction apex'] = [0.2, -0.2, -0.9]
-        options['RV free wall thickness'] = 0.05
-        options['RV outer diameter'] = 1.1
-        options['RV shear xz'] = 0.3
-        options['RV shear yz'] = 0.2
-        options['RV taper'] = 0.4
+        options['RV axis radius'] = 0.5
+        options['RV free wall thickness'] = 0.06
+        options['RV shear xz'] = 0.0
+        options['RV shear yz'] = 0.0
+        options['RV taper'] = 0.0
         options['RV tilt degrees'] = 0.0
 
         #options['Use cross derivatives'] = False  # Removed from interface until working
@@ -175,17 +176,18 @@ class MeshType_3d_heartventricles4(Scaffold_base):
             'Aortic valve',
             'Pulmonary valve',
             'Interventricular septum thickness',
-            'LV apex thickness',
+            'LV axis',
             'LV axis apex height',
             'LV axis base height',
+            'LV axis radius',
+            'LV apex thickness',
             'LV free wall thickness',
-            'LV outer diameter',
+            'RV axis origin',
             'RV axis',
             'RV axis apex height',
             'RV axis base height',
-            'RV construction apex',
+            'RV axis radius',
             'RV free wall thickness',
-            'RV outer diameter',
             'RV shear xz',
             'RV shear yz',
             'RV taper',
@@ -310,12 +312,12 @@ class MeshType_3d_heartventricles4(Scaffold_base):
             'LV apex thickness',
             'LV axis apex height',
             'LV axis base height',
+            'LV axis radius',
             'LV free wall thickness',
-            'LV outer diameter',
             'RV axis apex height',
             'RV axis base height',
-            'RV free wall thickness',
-            'RV outer diameter'
+            'RV axis radius',
+            'RV free wall thickness'
             ]:
             if options[key] < 0.0:
                 options[key] = 0.0
@@ -325,18 +327,20 @@ class MeshType_3d_heartventricles4(Scaffold_base):
         #         options[key] = 0.01
         #     elif options[key] > 0.99:
         #         options[key] = 0.99
-        for key in [
-                'RV axis',
-                'RV construction apex']:
+        for key in ['LV axis',
+                    'RV axis',
+                    'RV axis origin']:
             if len(options[key]) != 3:
                 if len(options[key]) > 3:
                     options[key] = options[key][:3]
                 else:
                     while len(options[key]) != 3:
                         options[key].append(0.0)
-        mag = vector.magnitude(options['RV axis'])
-        if mag < 0.00001:
-            options['RV axis'] = [0.0, 0.0, 1.0]
+        for key in ['LV axis',
+                    'RV axis']:
+            mag = vector.magnitude(options[key])
+            if mag < 0.00001:
+                options[key] = [0.0, 0.0, 1.0]
         if options['RV tilt degrees'] < 0.0:
             options['RV tilt degrees'] = 0.0
         elif options['RV tilt degrees'] > 44.999:
@@ -360,16 +364,17 @@ class MeshType_3d_heartventricles4(Scaffold_base):
         pulmonaryValve = options['Pulmonary valve']
         ivSeptumThickness = unitScale*options['Interventricular septum thickness']
         lvApexThickness = unitScale*options['LV apex thickness']
+        lvAxis = vector.normalise(options['LV axis'])
         lvAxisApexHeight = unitScale*options['LV axis apex height']
         lvAxisBaseHeight = unitScale*options['LV axis base height']
+        lvAxisRadius = unitScale*options['LV axis radius']
         lvFreeWallThickness = unitScale*options['LV free wall thickness']
-        lvOuterRadius = unitScale*0.5*options['LV outer diameter']
+        rvOrigin = [unitScale*s for s in options['RV axis origin']]
         rvAxis = vector.normalise(options['RV axis'])
         rvAxisApexHeight = unitScale*options['RV axis apex height']
         rvAxisBaseHeight = unitScale*options['RV axis base height']
-        rvConstructionApex = [unitScale*s for s in options['RV construction apex']]
+        rvAxisRadius = unitScale*options['RV axis radius']
         rvFreeWallThickness = unitScale*options['RV free wall thickness']
-        rvOuterRadius = unitScale*0.5*options['RV outer diameter']
         rvShearXZ = options['RV shear xz']
         rvShearYZ = options['RV shear yz']
         rvTaper = options['RV taper']
@@ -420,15 +425,15 @@ class MeshType_3d_heartventricles4(Scaffold_base):
         # useHeight = min(max(0.0, lvOuterHeight), 2.0*lvAxisApexHeight)
         # baseRadiansUp = getEllipseRadiansToX(lvAxisApexHeight, 0.0, lvAxisApexHeight - useHeight,
         #                                      initialTheta=0.5*math.pi*useHeight/lvAxisApexHeight)
-        # baseProportionUp = 2.0*getEllipseArcLength(lvAxisApexHeight, lvOuterRadius, 0.0, baseRadiansUp) \
-        #                    / getApproximateEllipsePerimeter(lvAxisApexHeight, lvOuterRadius)
+        # baseProportionUp = 2.0*getEllipseArcLength(lvAxisApexHeight, lvAxisRadius, 0.0, baseRadiansUp) \
+        #                    / getApproximateEllipsePerimeter(lvAxisApexHeight, lvAxisRadius)
         lvOrigin = [0.0, 0.0, 0.0]
-        lvApexAxis = [0.0, 0.0, -lvAxisApexHeight]
-        lvSideAxis = [0.0, -lvOuterRadius, 0.0]
+        lvApexAxis = vector.setMagnitude(lvAxis, -lvAxisApexHeight)
+        lvSideAxis = vector.setMagnitude(vector.crossproduct3(lvAxis, [0.0, -1.0, 0.0]), lvAxisRadius)
         lx, ld = createOvalPoints(lvOrigin, lvApexAxis, lvSideAxis, lvAxisBaseHeight,
                                   elementsCountUpLVTrackSurface, 0.0, math.pi)
 
-        ltx, ltd1, ltd2 = revolvePoints(lx, ld, lvOrigin, [0.0, 0.0, 1.0], elementsCountAroundLVTrackSurface, loop=True)
+        ltx, ltd1, ltd2 = revolvePoints(lx, ld, lvOrigin, lvAxis, elementsCountAroundLVTrackSurface, loop=True)
         lvTrackSurface = TrackSurface(elementsCountAroundLVTrackSurface, elementsCountUpLVTrackSurface, ltx, ltd1, ltd2,
                                       loop1=True)
 
@@ -436,16 +441,16 @@ class MeshType_3d_heartventricles4(Scaffold_base):
         elementsCountUpRVTrackSurface = 8
 
         rvox, rvoy, startRadians, endRadians = \
-            determineRVTiltOval(rvAxisApexHeight, rvAxisBaseHeight, rvOuterRadius, rvTiltRadians)
+            determineRVTiltOval(rvAxisApexHeight, rvAxisBaseHeight, rvAxisRadius, rvTiltRadians)
 
         rvPost = vector.normalise(vector.crossproduct3(rvAxis, [-1.0, 0.0, 0.0]))
         rvSide = vector.crossproduct3(rvPost, rvAxis)
-        rvOrigin = [rvConstructionApex[c] + rvox*rvAxis[c] + rvoy*rvSide[c] for c in range(3)]
+        rvConstructionApex = [rvOrigin[c] - rvox*rvAxis[c] - rvoy*rvSide[c] for c in range(3)]
         sin_alpha = math.sin(rvTiltRadians)
         cos_alpha = math.cos(rvTiltRadians)
         rvApexAxis = vector.setMagnitude([cos_alpha*rvAxis[c] + sin_alpha*rvSide[c] for c in range(3)],
                                          -rvAxisApexHeight)
-        scaledRvOuterRadius = (1.0 - rvTaper)*rvOuterRadius
+        scaledRvOuterRadius = (1.0 - rvTaper)*rvAxisRadius
         rvSideAxis = vector.setMagnitude(vector.crossproduct3(rvApexAxis, rvPost), scaledRvOuterRadius)
         rx, rd = createOvalPoints(rvOrigin, rvApexAxis, rvSideAxis, rvAxisBaseHeight,
                                   elementsCountUpRVTrackSurface, startRadians, endRadians)
