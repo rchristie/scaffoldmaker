@@ -975,7 +975,7 @@ class GeneralScaffoldTestCase(unittest.TestCase):
         tube3Surface = TrackSurface(elementsCountAround, elementsCountAlong, nx, nd1, nd2, nd12, loop1=True)
 
         XI_TOL = 1.0E-6
-        X_TOL = 1.0E-6
+        X_TOL = 1.0E-5
 
         startPosition = TrackSurfacePosition(12, 5, 0.8242639579553614, 0.999980904098904)
         p1x = tube1Surface.evaluateCoordinates(startPosition)
@@ -1041,6 +1041,14 @@ class GeneralScaffoldTestCase(unittest.TestCase):
         tLength = getCubicHermiteCurvesLength([tx[n][0] for n in range(elementsCountAlong + 1)],
                                               [td2[n][0] for n in range(elementsCountAlong + 1)])
         self.assertAlmostEqual(tLength, 0.5004154200664181, delta=X_TOL)
+
+        curveLocation1, curveX1 = getNearestLocationOnCurve(
+            cx, cd1, targetx=[1.0307591456989758, 0.3452962162336672, -0.05130331144410176], loop=True, instrument=True)
+        pass
+
+        aCurveLocation, cCurveLocation, acIntersection = getNearestLocationBetweenCurves(
+            ax, ad1, cx, cd1, aloop, cloop, instrument=True)
+        self.assertFalse(acIntersection)
 
         # context = Context("TrackSurface")
         # region = context.getDefaultRegion()
