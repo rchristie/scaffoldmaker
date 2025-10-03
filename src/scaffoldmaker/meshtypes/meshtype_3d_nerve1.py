@@ -668,12 +668,11 @@ class MeshType_3d_nerve1(Scaffold_base):
             parent_first_element = parent_mesh_group.createElementiterator().next()
             parent_location = (parent_element.getIdentifier() - parent_first_element.getIdentifier(), parent_xi[0])
             if (not trunk_is_parent) and (parent_location[0] == 0):
-                # can't have branch from the root element of a branch
-                if parent_mesh_group.getSize() == 1:
-                    logger.error("Nerve: can't make branch " + branch_name +
-                                 " off single element parent " + branch_parent_name)
-                    continue
-                parent_location = (1, 0.0)
+                if parent_location[0] < 0.99:
+                    logger.warning("Nerve: attaching branch " + branch_name +
+                                   " at end of first element of parent branch " + branch_parent_name +
+                                   " instead of calculated proportion " + str(parent_location[0]))
+                parent_location = (0, 1.0)
             cxd2 = 2.0 * (parent_xi[1] - 0.5)
             cxd3 = 2.0 * (parent_xi[2] - 0.5)
 
@@ -741,7 +740,12 @@ class MeshType_3d_nerve1(Scaffold_base):
 
                 if e == 0:
                     # branch root 3D element
-                    nids = [tnid[pn1], tnid[pn2], node_identifier]
+                    if parent_location[0] == 0:
+                        # special case of branch off first parent element
+                        # doesn't use the first local node as parent_location[1] == 1.0
+                        nids = [tnid[pn2], tnid[pn2], node_identifier]
+                    else:
+                        nids = [tnid[pn1], tnid[pn2], node_identifier]
                     scalefactors = [-1] + fns + dfns + [cxd2, cxd3] + coefs[0] + coefs[1] + coefs[2]
                     element = mesh3d.createElement(element_identifier, elementtemplate_branch_root)
                     element.setNodesByIdentifier(eft3dBR, nids)
@@ -773,7 +777,12 @@ class MeshType_3d_nerve1(Scaffold_base):
                     if e == 0:
                         # branch root 2D face
                         facetemplate_branch_root, eft2dBR = facetemplate_and_eft_list_branch_root[f]
-                        nids = [tnid[pn1], tnid[pn2], node_identifier]
+                        if parent_location[0] == 0:
+                            # special case of branch off first parent element
+                            # doesn't use the first local node as parent_location[1] == 1.0
+                            nids = [tnid[pn2], tnid[pn2], node_identifier]
+                        else:
+                            nids = [tnid[pn1], tnid[pn2], node_identifier]
                         scalefactors = scalefactors2d + fns + dfns + [cxd2, cxd3] + coefs[0] + coefs[1] + coefs[2]
                         face = mesh3d.createElement(face_identifier, facetemplate_branch_root)
                         face.setNodesByIdentifier(eft2dBR, nids)
