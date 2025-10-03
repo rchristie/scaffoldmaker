@@ -196,15 +196,25 @@ class VagusInputData:
                         unconnected_nodes.append(el)
 
                 # choose start, not necessarily first in unconnected nodes
-                furthest_distance = 0
+                # get the 2 unconnected end points with the highest closest distance to any other endpoint
+                furthest_distance_1 = furthest_distance_2 = -1.0
+                furthest_index_1 = furthest_index_2 = None
                 for index_1, node_id_1 in enumerate(unconnected_nodes):
+                    closest_distance = float('inf')
                     for index_2 in range(index_1, len(unconnected_nodes)):
                         node_id_2 = unconnected_nodes[index_2]
                         dist = distance(nid_coords[node_id_1], nid_coords[node_id_2])
-                        if dist > furthest_distance:
-                            furthest_distance = dist
+                        if dist < closest_distance:
+                            closest_distance = dist
+                    if closest_distance > furthest_distance_2:
+                        if closest_distance > furthest_distance_1:
+                            furthest_distance_2 = furthest_distance_1
+                            furthest_index_2 = furthest_index_1
+                            furthest_distance_1 = closest_distance
                             furthest_index_1 = index_1
-                            furthest_index_2 = index_2
+                        else:
+                            furthest_distance_2 = closest_distance
+                            furthest_index_2 = index_1
 
                 start_index = furthest_index_1 if furthest_index_1 < furthest_index_2 else furthest_index_2
                 start = unconnected_nodes[start_index]

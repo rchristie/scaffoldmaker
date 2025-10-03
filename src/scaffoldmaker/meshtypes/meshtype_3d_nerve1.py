@@ -990,15 +990,18 @@ class MeshType_3d_nerve1(Scaffold_base):
 
             for branch_name in branch_names:
                 branch_group = findAnnotationGroupByName(annotation_groups, branch_name)
-                for meshgroup in [mesh1d, mesh2d, mesh3d]:
-                    branch_common_mesh_group = branch_common_group.getMeshGroup(meshgroup)
-                    branch_mesh_group = branch_group.getMeshGroup(meshgroup)
+                if not branch_group:
+                    logger.warning("Nerve: Could not find annotation for branch " + branch_name +
+                                   ". Can't add to common branch group")
+                    continue
+                for meshnd in [mesh1d, mesh2d, mesh3d]:
+                    branch_common_mesh_group = branch_common_group.getMeshGroup(meshnd)
+                    branch_mesh_group = branch_group.getMeshGroup(meshnd)
                     el_iter = branch_mesh_group.createElementiterator()
                     element = el_iter.next()
                     while element.isValid():
                         branch_common_mesh_group.addElement(element)
                         element = el_iter.next()
-
 
         # ============================================
         # Add trunk section groups: cervical, thoracic
