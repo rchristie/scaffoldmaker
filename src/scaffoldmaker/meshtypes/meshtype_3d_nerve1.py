@@ -1329,7 +1329,6 @@ def generate_trunk_1d(vagus_data, trunk_proportion, trunk_elements_count_prefit,
     datapoints = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
     datapoints.destroyAllNodes()
 
-    segments_trunk_coordinates = vagus_data.get_segments_trunk_coordinates()
     segments_metadata = {}
     with ChangeManager(fieldmodule):
         # make a real field which increases down the trunk proportional to vagus coordinates
@@ -1342,7 +1341,10 @@ def generate_trunk_1d(vagus_data, trunk_proportion, trunk_elements_count_prefit,
         datapoints_max_trunk_distance = fieldmodule.createFieldNodesetMaximum(host_trunk_distance, datapoints)
     fieldcache.clearLocation()
     distance_to_material = trunk_proportion / trunk_elements_count
-    for segment_name, sx in segments_trunk_coordinates.items():
+    segment_trunk_info_list = vagus_data.get_segment_trunk_info_list()
+    for segment_trunk_info in segment_trunk_info_list:
+        segment_name = segment_trunk_info['name']
+        sx = segment_trunk_info['unordered_coordinates']
         generate_datapoints(fit_region, sx, start_data_identifier=1)
         min_result, segment_min_trunk_distance = datapoints_min_trunk_distance.evaluateReal(fieldcache, 1)
         max_result, segment_max_trunk_distance = datapoints_max_trunk_distance.evaluateReal(fieldcache, 1)
