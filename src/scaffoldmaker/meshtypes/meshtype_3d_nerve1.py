@@ -1,6 +1,3 @@
-import math
-import logging
-
 from cmlibs.maths.vectorops import (
     add, cross, distance, dot, magnitude, matrix_mult, matrix_inv, mult, normalize, rejection, set_magnitude, sub)
 from cmlibs.utils.zinc.field import find_or_create_field_group, find_or_create_field_coordinates
@@ -29,6 +26,9 @@ from scaffoldmaker.utils.read_vagus_data import load_vagus_data
 from scaffoldmaker.utils.zinc_utils import (
     define_and_fit_field, find_or_create_field_zero_fibres, fit_hermite_curve, generate_curve_mesh, generate_datapoints,\
     generate_mesh_marker_points)
+import copy
+import logging
+import math
 
 
 logger = logging.getLogger(__name__)
@@ -584,6 +584,8 @@ class MeshType_3d_nerve1(Scaffold_base):
 
         parent_parameters = {}
         parent_parameters[trunk_group_name] = (tx, td1, td2, td12, td3, td13, tnid)
+        parent_elements_counts = {}  # map of parent branch name to list of numbers of elements in branches
+        parent_elements_counts[trunk_group_name] = [trunk_elements_count]
         # the first branch node mainly marks connection on the parent/trunk centroid,
         # hence the following code starts branches from a proportion of parent radius
         # out, up to an upper limit on the proportion of the first segment:
@@ -605,22 +607,49 @@ class MeshType_3d_nerve1(Scaffold_base):
         # iterate over branches off trunk, and branches of branches
         visited_branches_order = []
         branch_root_parameters = {}
-        branch_data = vagus_data.get_branch_data()
+        branch_coordinates_data = vagus_data.get_branch_coordinates_data()
+        branch_sequences_data = vagus_data.get_branch_sequences_data()
         branch_parent_map = vagus_data.get_branch_parent_map()
         queue = [branch for branch in branch_parent_map.keys() if branch_parent_map[branch] == trunk_group_name]
-        while queue:
-            branch_name = queue.pop(0)
-            if branch_name in visited_branches_order:
-                logger.warning("already processed branch " + branch_name)
-                continue
-            visited_branches_order.append(branch_name)
+        branch_name = None
+        branch_parent_name = None
+        trunk_is_parent = False
+        branch_coordinates = []
+        branch_data_nodes_counts = []
+        branch_box_group = None
+        branch_box_mesh_group = None
+        branch_box_face_mesh_group = None
+        branch_box_line_mesh_group = None
 
-            branch_px = [branch_x[0] for branch_x in branch_data[branch_name]]
-            branch_parent_name = branch_parent_map[branch_name]
-            trunk_is_parent = branch_parent_name == trunk_group_name
-            # print(branch_name, '<--', branch_parent_name)
+        # iterate over branch names and distinct branches from the branch_sequences_data
+        while True:
+            if not branch_coordinates:
+                # get the next branch in queue
+                if not queue:
+                    break
+                branch_name = queue.pop(0)
+                if branch_name in visited_branches_order:
+                    logger.warning("already processed branch " + branch_name)
+                    continue
+                visited_branches_order.append(branch_name)
+                branch_parent_name = branch_parent_map[branch_name]
+                trunk_is_parent = branch_parent_name == trunk_group_name
+                # print(branch_name, '<--', branch_parent_name)
+                branch_coordinates = copy.copy(branch_coordinates_data[branch_name])
+                branch_data_nodes_counts = copy.copy(branch_sequences_data[branch_name])
+
+                # branch annotation groups
+                branch_box_group = AnnotationGroup(region, (branch_name, annotation_term_map[branch_name]))
+                annotation_groups.append(branch_box_group)
+                branch_box_mesh_group = branch_box_group.getMeshGroup(mesh3d)
+                branch_box_face_mesh_group = branch_box_group.getMeshGroup(mesh2d)
+                branch_box_line_mesh_group = branch_box_group.getMeshGroup(mesh1d)
 
             tx, td1, td2, td12, td3, td13, tnid = parent_parameters[branch_parent_name]
+            branch_nodes_count = branch_data_nodes_counts[0]
+            branch_px = branch_coordinates[:branch_nodes_count]
+            branch_coordinates = branch_coordinates[branch_nodes_count:]
+            branch_data_nodes_counts.pop(0)
 
             # get point in trunk volume closest to first point in branch data
             # parent_group = trunk_group
@@ -666,8 +695,19 @@ class MeshType_3d_nerve1(Scaffold_base):
                 logger.error("Nerve: branch " + branch_name + " fitted start point could not be found in parent nerve")
                 continue
             parent_first_element = parent_mesh_group.createElementiterator().next()
-            parent_location = (parent_element.getIdentifier() - parent_first_element.getIdentifier(), parent_xi[0])
-            if (not trunk_is_parent) and (parent_location[0] == 0):
+            parent_index = parent_element.getIdentifier() - parent_first_element.getIdentifier()
+            branch_in_first_parent_element = False
+            # handle element indexes when there are several branches of the same name
+            # because the parent parameters are just appended after each branch = there isn't an element in between.
+            parent_start_index = 0
+            for elements_count in parent_elements_counts[branch_parent_name]:
+                if parent_index < (parent_start_index + elements_count):
+                    break
+                parent_index += 1
+                parent_start_index += elements_count + 1
+
+            parent_location = (parent_index, parent_xi[0])
+            if (not trunk_is_parent) and (parent_index - parent_start_index == 0):
                 if parent_location[0] < 0.99:
                     logger.warning("Nerve: attaching branch " + branch_name +
                                    " at end of first element of parent branch " + branch_parent_name +
@@ -706,13 +746,6 @@ class MeshType_3d_nerve1(Scaffold_base):
             basis_from = [pd1, pd2, pd3]
             basis_to = [bd1, bd2, bd3]
             coefs = matrix_mult(basis_to, matrix_inv(basis_from))
-
-            # branch annotation groups
-            branch_box_group = AnnotationGroup(region, (branch_name, annotation_term_map[branch_name]))
-            annotation_groups.append(branch_box_group)
-            branch_box_mesh_group = branch_box_group.getMeshGroup(mesh3d)
-            branch_box_face_mesh_group = branch_box_group.getMeshGroup(mesh2d)
-            branch_box_line_mesh_group = branch_box_group.getMeshGroup(mesh1d)
 
             # get side derivatives, minimising rotation from trunk
             # dir2 = normalize(bd2)
@@ -804,7 +837,14 @@ class MeshType_3d_nerve1(Scaffold_base):
             child_branches = [branch for branch in branch_parent_map.keys() if branch_parent_map[branch] == branch_name]
             if child_branches:
                 queue = child_branches + queue
-                parent_parameters[branch_name] = (cx, cd1, cd2, cd12, cd3, cd13, cnid)
+                existing_parent_parameters = parent_parameters.get(branch_name)
+                if existing_parent_parameters:
+                    for dst, src in zip(existing_parent_parameters, (cx, cd1, cd2, cd12, cd3, cd13, cnid)):
+                        dst += src
+                    parent_elements_counts[branch_name].append(len(cx) - 1)
+                else:
+                    parent_parameters[branch_name] = existing_parent_parameters = (cx, cd1, cd2, cd12, cd3, cd13, cnid)
+                    parent_elements_counts[branch_name] = [len(cx) - 1]
 
         # =================================================
         # Add material coordinates and straight coordinates

@@ -5,7 +5,8 @@ from cmlibs.maths.vectorops import add, cross, div, magnitude, mult, normalize, 
 from cmlibs.utils.zinc.field import (
     find_or_create_field_coordinates, find_or_create_field_finite_element, find_or_create_field_group,
     find_or_create_field_stored_mesh_location, find_or_create_field_stored_string)
-from cmlibs.utils.zinc.finiteelement import get_maximum_element_identifier, get_maximum_node_identifier
+from cmlibs.utils.zinc.finiteelement import (
+    get_element_node_identifiers, get_maximum_element_identifier, get_maximum_node_identifier)
 from cmlibs.utils.zinc.general import ChangeManager, HierarchicalChangeManager
 from cmlibs.zinc.context import Context
 from cmlibs.zinc.element import Element, Elementbasis, MeshGroup
@@ -19,7 +20,11 @@ from scaffoldfitter.fitterstepconfig import FitterStepConfig
 from scaffoldfitter.fitterstepfit import FitterStepFit
 from scaffoldmaker.utils import interpolation as interp
 import copy
+import logging
 import math
+
+
+logger = logging.getLogger(__name__)
 
 
 def interpolateNodesCubicHermite(cache, coordinates, xi, normal_scale,
@@ -132,6 +137,32 @@ def mesh_destroy_elements_and_nodes_by_identifiers(mesh, element_identifiers):
         del destroyMesh
         del destroyGroup
     return
+
+
+def get_mesh_node_identifier_sequences(mesh1d, field):
+    """
+    Get sequences of connected nodes in 1D mesh which field is directly defined on.
+    Implementation expects mesh to consist of only polylines i.e. not a network and for elements to be
+    consecutive and in the same orientation along each sequence.
+    :param mesh1d: 1-D mesh or mesh group which field is defined on in every element.
+    :param field: The field to get connectivity for. Must be finite element type.
+    :return: List of lists of node identifiers in each sequence.
+    """
+    node_ids_list = []
+    elementiterator = mesh1d.createElementiterator()
+    element = elementiterator.next()
+    while element.isValid():
+        eft = element.getElementfieldtemplate(field, -1)
+        if not eft.isValid():
+            logger.error("mesh_get_connected_node_identifier_sequences. Field not defined on element")
+            return []
+        node_ids = get_element_node_identifiers(element, eft)
+        if node_ids_list and (node_ids_list[-1][-1] == node_ids[0]):
+            node_ids_list[-1] += node_ids[1:]
+        else:
+            node_ids_list.append(node_ids)
+        element = elementiterator.next()
+    return node_ids_list
 
 
 def get_nodeset_field_parameters(nodeset, field, only_value_labels=None):

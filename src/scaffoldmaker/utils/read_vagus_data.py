@@ -13,7 +13,7 @@ from cmlibs.zinc.node import Node
 
 from scaffoldmaker.annotation.vagus_terms import (
     get_vagus_term, marker_name_in_terms, get_left_vagus_marker_locations_list, get_right_vagus_marker_locations_list)
-from scaffoldmaker.utils.zinc_utils import get_nodeset_field_parameters
+from scaffoldmaker.utils.zinc_utils import get_nodeset_field_parameters, get_mesh_node_identifier_sequences
 
 
 logger = logging.getLogger(__name__)
@@ -38,9 +38,11 @@ class VagusInputData:
 
         self._annotation_term_map = {}
         self._branch_coordinates_data = {}
+        self._branch_radius_data = {}
+        self._branch_connectivity_data = {}
+        self._branch_sequences_data = {}
         self._branch_parent_map = {}
         self._branch_common_group_map = {}
-        self._branch_radius_data = {}
         self._datafile_path = None
         self._level_markers = {}
         self._orientation_data = {}
@@ -55,6 +57,8 @@ class VagusInputData:
         nodes = fm.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
         coordinates = fm.findFieldByName("coordinates").castFiniteElement()
         radius = fm.findFieldByName("radius").castFiniteElement()
+        if not radius.isValid():
+            radius = None
         datapoints = fm.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
         marker_names = fm.findFieldByName("marker_name")
         mesh = fm.findMeshByDimension(1)
@@ -143,7 +147,7 @@ class VagusInputData:
                 trunk_node_ids += [value[0] for value in node_coordinate_values]
                 for value in node_coordinate_values:
                     trunk_coordinates.append(value[1][0])
-                if radius.isValid():
+                if radius:
                     node_radius_values = get_nodeset_field_parameters(nodeset_group, radius, [Node.VALUE_LABEL_VALUE])[1]
                     for value in node_radius_values:
                         trunk_radius.append(value[1][0][0])
@@ -253,7 +257,7 @@ class VagusInputData:
             else:
                 self._trunk_coordinates = trunk_coordinates[:]
 
-            if radius.isValid() and not all(value == 0.0 for value in trunk_radius):
+            if radius and not all(value == 0.0 for value in trunk_radius):
                 if len(trunk_elements) > 0 and trunk_path_ids:
                     ordered_trunk_radius = []
                     for trunk_path_id in trunk_path_ids:
@@ -264,7 +268,6 @@ class VagusInputData:
                     self._trunk_radius = trunk_radius[:]
 
         # extract branch data - name, coordinates, nodes, radius
-        branch_nodes_data = {}
         for branch_name in branch_group_names:
             group = fm.findFieldByName(branch_name).castGroup()
             nodeset_group = group.getNodesetGroup(nodes)
@@ -273,36 +276,96 @@ class VagusInputData:
                 # branch should have at least two nodes to be connected to parent
                 continue
             _, values = get_nodeset_field_parameters(nodeset_group, coordinates, [Node.VALUE_LABEL_VALUE])
-            branch_nodes = [value[0] for value in values]
-            branch_parameters = [value[1][0] for value in values]
-            self._branch_coordinates_data[branch_name] = branch_parameters
-            branch_nodes_data[branch_name] = branch_nodes
+            # make above into a dict to look up by node id
+            node_coordinates_parameters = {}
+            for node_id, parameters in values:
+                node_coordinates_parameters[node_id] = parameters[0][0]
 
-            # not used at the moment
-            if radius.isValid():
+            mesh_group = group.getMeshGroup(mesh)
+            node_ids_list = get_mesh_node_identifier_sequences(mesh_group, coordinates)
+            if node_ids_list:
+                # check for old data which didn't make an element from the trunk node to the first branch node:
+                first_branch_node_id = values[0][0]
+                for node_ids in node_ids_list:
+                    if first_branch_node_id in node_ids:
+                        break
+                else:
+                    logger.warning('Branch ' + branch_name + ' did not have parent node ' + str(first_branch_node_id) +
+                                   ' in branch elements. Including as first node.')
+                    node_ids_list[0].insert(0, first_branch_node_id)
+            else:
+                # if no elements, fall back to branch nodes in order, allows only a single branch
+                node_ids_list = [[value[0] for value in values]]
+            # get node coordinates in order
+            branch_coordinates = []
+            for node_ids in node_ids_list:
+                for node_id in node_ids:
+                    branch_coordinates.append(node_coordinates_parameters[node_id])
+            self._branch_coordinates_data[branch_name] = branch_coordinates
+            self._branch_connectivity_data[branch_name] = node_ids_list
+            self._branch_sequences_data[branch_name] = [len(node_ids) for node_ids in node_ids_list]
+
+            if radius:
                 _, values = get_nodeset_field_parameters(nodeset_group, radius, [Node.VALUE_LABEL_VALUE])
-                branch_radius = [value[1][0][0] for value in values]
-                if not all(value == 0.0 for value in branch_radius):
+                if not all((value[1][0][0] == 0.0) for value in values):
+                    # make above into a dict to look up by node id
+                    node_radius_parameters = {}
+                    for node_id, parameters in values:
+                        node_radius_parameters[node_id] = parameters[0][0]
+                    branch_radius = []
+                    for node_ids in node_ids_list:
+                        for node_id in node_ids:
+                            branch_radius.append(node_radius_parameters[node_id])
                     self._branch_radius_data[branch_name] = branch_radius
 
-        # find parent branch where it connects to
-        for branch_name, branch_nodes in branch_nodes_data.items():
-            # assumes trunk and branch node identifiers are strictly increasing.
-            branch_first_node = branch_nodes[0]
-
-            #  first check if trunk is a parent by searching for a common node
-            parent_name = ''
-            if branch_first_node in trunk_node_ids:
-                parent_name = self._trunk_group_name
-            else:
-                # check other branches if a common node exists
-                for parent_branch_name, parent_branch_nodes in branch_nodes_data.items():
-                    if parent_branch_name != branch_name:
-                        parent_first_node = parent_branch_nodes[0]
-                        if branch_first_node != parent_first_node and branch_first_node in parent_branch_nodes:
-                            parent_name = parent_branch_name
+        # find parent branches where each branch connects to
+        # limitaton: parent is the same for each separate branch with the same name
+        for branch_name, node_ids_list in self._branch_connectivity_data.items():
+            parent_name = None
+            parameters_index = 0
+            for node_ids in node_ids_list:
+                next_parent_name = None
+                for start_node_index in (0, -1):  # in case reversed order
+                    branch_first_node_id = node_ids[start_node_index]
+                    #  first check if trunk is a parent by searching for a common node
+                    if branch_first_node_id in trunk_node_ids:
+                        next_parent_name = self._trunk_group_name
+                        break
+                if not next_parent_name:
+                    # check other branches if a common node exists
+                    # issue: likely to have problems if branch is processed before child branch
+                    for start_node_index in (0, -1):  # in case reversed order
+                        branch_first_node_id = node_ids[start_node_index]
+                        for parent_branch_name, parent_node_ids_list in self._branch_connectivity_data.items():
+                            if parent_branch_name != branch_name:
+                                for parent_node_ids in parent_node_ids_list:
+                                    if branch_first_node_id in parent_node_ids:
+                                        next_parent_name = parent_branch_name
+                                        break
+                            if next_parent_name:
+                                break
+                        if next_parent_name:
                             break
-            if parent_name == '':
+                if next_parent_name:
+                    if parent_name:
+                        if next_parent_name != parent_name:
+                            logger.warning('Branches with name ' + branch_name + ' have both ' + parent_name + ' and ' +
+                                           next_parent_name + ' as parents. Using ' + parent_name)
+                    else:
+                        parent_name = next_parent_name
+                    if start_node_index == -1:
+                        # reverse order of branch nodes, parameters etc. so always heading away from parent
+                        count = len(node_ids)
+                        branch_coordinates = self._branch_coordinates_data[branch_name]
+                        branch_coordinates[parameters_index:parameters_index + count] =\
+                            branch_coordinates[parameters_index + count - 1:parameters_index - 1:-1]
+                        if radius:
+                            branch_radius = self._branch_radius_data[branch_name]
+                            branch_radius[parameters_index:parameters_index + count] =\
+                                branch_radius[parameters_index + count - 1:parameters_index - 1:-1]
+                        node_ids.reverse()  # reverse in place
+                parameters_index += len(node_ids)
+            if not parent_name:
                 # assume trunk is a parent by default, if no other is found
                 parent_name = self._trunk_group_name
             self._branch_parent_map[branch_name] = parent_name
@@ -356,7 +419,7 @@ class VagusInputData:
         """
         return self._trunk_radius
 
-    def get_branch_data(self):
+    def get_branch_coordinates_data(self):
         """
         Get all branch names and coordinates from the data.
         return: Dict mapping branch name to x, y, z data.
@@ -370,6 +433,13 @@ class VagusInputData:
         return: List of radius values for the trunk group.
         """
         return self._branch_radius_data
+
+    def get_branch_sequences_data(self):
+        """
+        Get information about how many distinct branches there are for each branch name.
+        return: Dict mapping branch name to list of numbers of nodes in each branch sequence.
+        """
+        return self._branch_sequences_data
 
     def get_annotation_term_map(self):
         """
