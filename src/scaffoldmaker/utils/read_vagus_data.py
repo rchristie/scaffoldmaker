@@ -114,12 +114,20 @@ class VagusInputData:
                 marker_node = marker_node_iter.next()
 
         # extract orientation data
+        orientation_ignore_node_ids = []
+        orientation_ignore_group_name = 'orientation ignore'
+        if orientation_ignore_group_name in orientation_group_names:
+            group = fm.findFieldByName(orientation_ignore_group_name).castGroup()
+            nodeset_group = group.getNodesetGroup(nodes)
+            _, values = get_nodeset_field_parameters(nodeset_group, coordinates, [Node.VALUE_LABEL_VALUE])
+            orientation_ignore_node_ids = [value[0] for value in values]
+            orientation_group_names.remove(orientation_ignore_group_name)
         for orientation_group_name in orientation_group_names:
             group = fm.findFieldByName(orientation_group_name).castGroup()
             nodeset_group = group.getNodesetGroup(nodes)
             _, values = get_nodeset_field_parameters(nodeset_group, coordinates, [Node.VALUE_LABEL_VALUE])
-            orientation_points = [value[1][0][0] for value in values]
-            self._orientation_data[orientation_group_name] = orientation_points[:]
+            orientation_points = [value[1][0][0] for value in values if (value[0] not in orientation_ignore_node_ids)]
+            self._orientation_data[orientation_group_name] = orientation_points
 
         # extract trunk data - coordinates, nodes, radius
         if len(found_trunk_group_names) > 0:

@@ -1691,6 +1691,11 @@ Node: 336
  -1.285509252460388e+03
  -2.958677308834912e+02
   2.574722374853684e+02
+Node: 337
+  2.900467806037634e+04
+ -4.161084783385378e+03
+ -1.361564654132272e+02
+  0.000000000000000e+00
 !#mesh mesh1d, dimension=1, nodeset=nodes
 Define element template: element1
 Shape. Dimension=1, line
@@ -2765,7 +2770,11 @@ Node group:
 Group name: orientation anterior
 !#nodeset nodes
 Node group:
-316,318..320,322,324,326,328,330,332,334..335
+316,318..320,322,324,326,328,330,332,334..335,337
+Group name: orientation ignore
+!#nodeset nodes
+Node group:
+337
 Group name: orientation left
 !#nodeset nodes
 Node group:
