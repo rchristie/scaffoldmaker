@@ -364,13 +364,14 @@ class VagusInputData:
                     if start_node_index == -1:
                         # reverse order of branch nodes, parameters etc. so always heading away from parent
                         count = len(node_ids)
-                        branch_coordinates = self._branch_coordinates_data[branch_name]
-                        branch_coordinates[parameters_index:parameters_index + count] =\
-                            branch_coordinates[parameters_index + count - 1:parameters_index - 1:-1]
-                        if radius:
-                            branch_radius = self._branch_radius_data[branch_name]
-                            branch_radius[parameters_index:parameters_index + count] =\
-                                branch_radius[parameters_index + count - 1:parameters_index - 1:-1]
+                        branch_x = self._branch_coordinates_data[branch_name]
+                        branch_r = self._branch_radius_data.get(branch_name)
+                        for i in range(count // 2):
+                            i1 = parameters_index + i
+                            i2 = parameters_index + count - i - 1
+                            branch_x[i1], branch_x[i2] = branch_x[i2], branch_x[i1]
+                            if branch_r:
+                                branch_r[i1], branch_r[i2] = branch_r[i2], branch_r[i1]
                         node_ids.reverse()  # reverse in place
                 parameters_index += len(node_ids)
             if not parent_name:
