@@ -60,7 +60,7 @@ class MeshType_3d_nerve1(Scaffold_base):
             'Trunk proportion': 1.0,
             'Trunk fit number of iterations': 5,
             'Default anterior direction': [0.0, 1.0, 0.0],
-            'Default trunk diameter': 3.0,
+            'Default trunk diameter': 3000.0,
             'Branch diameter trunk proportion': 0.5
         }
         return options

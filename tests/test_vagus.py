@@ -283,7 +283,7 @@ class VagusScaffoldTestCase(unittest.TestCase):
         self.assertEqual(options.get('Trunk proportion'), 1.0)
         self.assertEqual(options.get('Trunk fit number of iterations'), 5)
         self.assertEqual(options.get('Default anterior direction'), [0.0, 1.0, 0.0])
-        self.assertEqual(options.get('Default trunk diameter'), 3.0)
+        self.assertEqual(options.get('Default trunk diameter'), 3000.0)
         self.assertEqual(options.get('Branch diameter trunk proportion'), 0.5)
         # change options to make test fast and consistent, with minor effect on result:
         options['Number of elements along the trunk pre-fit'] = 10
