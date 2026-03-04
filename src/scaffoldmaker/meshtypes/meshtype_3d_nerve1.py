@@ -24,8 +24,8 @@ from scaffoldmaker.utils.interpolation import (
     smoothCurveSideCrossDerivatives, track_curve_side_direction)
 from scaffoldmaker.utils.read_vagus_data import load_vagus_data
 from scaffoldmaker.utils.zinc_utils import (
-    define_and_fit_field, find_or_create_field_zero_fibres, fit_hermite_curve, generate_curve_mesh, generate_datapoints,\
-    generate_mesh_marker_points)
+    define_and_fit_field, find_or_create_field_zero_fibres, fit_hermite_curve, generate_curve_mesh,
+    generate_datapoints, generate_mesh_marker_points)
 import copy
 import logging
 import math
@@ -1149,7 +1149,14 @@ def generate_trunk_1d(vagus_data, trunk_proportion, trunk_elements_count_prefit,
     is_left = vagus_data.get_side_label() == 'left'
     raw_marker_data = vagus_data.get_level_markers()
     px = [e[0] for e in trunk_data_coordinates]
-    bx, bd1 = get_curve_from_points(px, number_of_elements=trunk_elements_count_prefit)
+    segment_trunk_info_list = vagus_data.get_segment_trunk_info_list()
+    if segment_trunk_info_list:
+        ax = []
+        for segment_trunk_info in segment_trunk_info_list:
+            ax += segment_trunk_info['ordered_points']
+    else:
+        ax = px
+    bx, bd1 = get_curve_from_points(ax, number_of_elements=trunk_elements_count_prefit)
     length = getCubicHermiteCurvesLength(bx, bd1)
     # outlier_length = 0.025 * length
     # # needs to be bigger if fewer elements:
@@ -1274,13 +1281,45 @@ def generate_trunk_1d(vagus_data, trunk_proportion, trunk_elements_count_prefit,
 
         zero_fibres = find_or_create_field_zero_fibres(fieldmodule)
 
+        # create group for applying higher stiffness for multi-path segments
+        # elements are in this group if either end nodes are in the range of a multi-path segment
+        multi_path_group = fieldmodule.createFieldGroup()
+        multi_path_group.setName('multi-path')
+        multi_path_group.setManaged(True)  # if not managed, group settings are ignored
+        multi_path_group_name = multi_path_group.getName()  # in case name was in use
+        multi_path_mesh_group = multi_path_group.createMeshGroup(mesh1d)
+        data_multi_path_ranges = []
+        for segment_trunk_info in segment_trunk_info_list:
+            if not segment_trunk_info.get('ordered_coordinates'):
+                data_multi_path_ranges.append(segment_trunk_info['range'])
+                # print('segment', segment_trunk_info['name'], 'is multi-path')
+
+        node_in_data_multi_path_range = []
+        for x in ex:
+            in_data_multi_path_range = False
+            for data_multi_path_range in data_multi_path_ranges:
+                for c in range(3):
+                    if (x[c] < data_multi_path_range[0][c]) or (x[c] > data_multi_path_range[1][c]):
+                        break
+                else:
+                    in_data_multi_path_range = True
+                    break
+            node_in_data_multi_path_range.append(in_data_multi_path_range)
+        element_in_data_multi_path_range = []
+        for element_identifier in range(1, trunk_elements_count + 1):
+            if (node_in_data_multi_path_range[element_identifier - 1] or
+                    node_in_data_multi_path_range[element_identifier]):
+                multi_path_mesh_group.addElement(mesh1d.findElementByIdentifier(element_identifier))
+                # print("Element", element_identifier,"is in multi-path range")
+
     # note that fitting is very slow if done within ChangeManager as find mesh location is slow
     # this includes working with the user-supplied region which is called with ChangeManager on.
     fitter = GeometryFitter(region=fit_region)
     length = getCubicHermiteCurvesLength(ex, ed1)
-    outlier_length = 0.025 * length
-    fitter.getInitialFitterStepConfig().setGroupOutlierLength(None, outlierLength=outlier_length)
-    # fitter.setDiagnosticLevel(1)
+    outlier_length = 0.05 * length
+    config_step = fitter.getInitialFitterStepConfig()
+    config_step.setGroupOutlierLength(None, outlierLength=outlier_length)
+    fitter.setDiagnosticLevel(1)
     fitter.setModelCoordinatesField(coordinates)
     fitter.setFibreField(zero_fibres)
     del zero_fibres
@@ -1294,30 +1333,29 @@ def generate_trunk_1d(vagus_data, trunk_proportion, trunk_elements_count_prefit,
     points_count_calibration_factor = len(px) / 25000
     # calibration_length = 27840.0
     length_calibration_factor = length / 25000.0
-    strain_penalty = 10000.0 * points_count_calibration_factor * length_calibration_factor
+    strain_penalty = 1.0E+4 * points_count_calibration_factor * length_calibration_factor
     curvature_penalty = 1.0E+9 * points_count_calibration_factor * (length_calibration_factor ** 3)
-    marker_weight = 10.0 * points_count_calibration_factor
-    sliding_factor = 0.0001
+    marker_weight = 20.0 * points_count_calibration_factor
+    sliding_factor = 0.01
 
-    if trunk_fit_iterations > 0:
-        fit1 = FitterStepFit()
-        fitter.addFitterStep(fit1)
-        fit1.setGroupDataWeight("marker", marker_weight)
-        fit1.setGroupStrainPenalty(None, [strain_penalty])
-        fit1.setGroupCurvaturePenalty(None, [curvature_penalty])
-        fit1.setGroupDataSlidingFactor(None, sliding_factor)
-        fit1.run()
-        del fit1
+    for step in range(0, min(2, trunk_fit_iterations)):
+        fit_step = FitterStepFit()
+        fitter.addFitterStep(fit_step)
+        if step == 0:
+            fit_step.setGroupDataWeight("marker", marker_weight)
+            fit_step.setUpdateReferenceState(True)
+        weight = 1.0 if (step == 0) else 0.1
+        fit_step.setGroupStrainPenalty(None, [weight * strain_penalty])
+        fit_step.setGroupCurvaturePenalty(None, [weight * curvature_penalty])
+        fit_step.setGroupDataSlidingFactor(None, weight * sliding_factor)
 
-    if trunk_fit_iterations > 1:
-        fit2 = FitterStepFit()
-        fitter.addFitterStep(fit2)
-        fit2.setGroupStrainPenalty(None, [0.1 * strain_penalty])
-        fit2.setGroupCurvaturePenalty(None, [0.1 * curvature_penalty])
-        fit2.setGroupDataSlidingFactor(None, 0.1 * sliding_factor)
-        fit2.setNumberOfIterations(trunk_fit_iterations - 1)
-        fit2.run()
-        del fit2
+        fit_step.setGroupStrainPenalty(multi_path_group_name, [5.0 * weight * strain_penalty])
+        fit_step.setGroupCurvaturePenalty(multi_path_group_name, [50.0 * weight * curvature_penalty])
+
+        if step > 0:
+            fit_step.setNumberOfIterations(trunk_fit_iterations - 1)
+        fit_step.run()
+        del fit_step
 
     datapoints = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_DATAPOINTS)
     rms_error, max_error = fitter.getDataRMSAndMaximumProjectionError(trunk_group.getNodesetGroup(datapoints))
@@ -1391,7 +1429,6 @@ def generate_trunk_1d(vagus_data, trunk_proportion, trunk_elements_count_prefit,
         datapoints_max_trunk_distance = fieldmodule.createFieldNodesetMaximum(host_trunk_distance, datapoints)
     fieldcache.clearLocation()
     distance_to_material = trunk_proportion / trunk_elements_count
-    segment_trunk_info_list = vagus_data.get_segment_trunk_info_list()
     for segment_trunk_info in segment_trunk_info_list:
         segment_name = segment_trunk_info['name']
         sx = segment_trunk_info['unordered_coordinates']

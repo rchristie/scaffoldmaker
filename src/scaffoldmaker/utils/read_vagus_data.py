@@ -145,7 +145,6 @@ class VagusInputData:
             trunk_node_ids = []
             trunk_coordinates = []
             trunk_radius = []
-            trunk_elements = []
             for found_trunk_group_name in found_trunk_group_names:
                 group = fm.findFieldByName(found_trunk_group_name).castGroup()
                 nodeset_group = group.getNodesetGroup(nodes)
@@ -160,120 +159,11 @@ class VagusInputData:
                     for value in node_radius_values:
                         trunk_radius.append(value[1][0][0])
 
-                # get trunk elements
-                if mesh_group.getSize() > 0:
-                    element_iterator = mesh_group.createElementiterator()
-                    element = element_iterator.next()
-                    while element.isValid():
-                        eft = element.getElementfieldtemplate(coordinates, -1)
-                        local_node_identifiers = get_element_node_identifiers(element, eft)
-                        trunk_elements.append({'id': element.getIdentifier(),
-                                               'nodes': local_node_identifiers})
-                        element = element_iterator.next()
-
             self._segment_trunk_info_list = make_segment_trunk_info(
                 fm, fc, coordinates, nodes, mesh, group_list, found_trunk_group_names, self._trunk_group_name)
 
-            # order trunk coordinates top to bottom in case trunk elements are available
-            if trunk_elements:
-                # build trunk graph: map of node identifiers to node identifiers they are connected to
-                nid_coords = {node_id: n_coord[0] for node_id, n_coord in zip(trunk_node_ids, trunk_coordinates)}
-                trunk_graph = {node_id: [] for node_id in nid_coords}
-                for element in trunk_elements:
-                    local_node_1, local_node_2 = element['nodes']
-                    if (local_node_1 in trunk_node_ids) and (local_node_2 in trunk_node_ids):
-                        trunk_graph[local_node_1].append(local_node_2)
-                        trunk_graph[local_node_2].append(local_node_1)
-                # add any isolated nodes
-                for node_id in trunk_node_ids:
-                    if node_id not in trunk_graph.keys():
-                        trunk_graph[node_id] = []
-                # get list of end node identifiers: those either isolated or connected to one other node
-                end_node_ids = []
-                for node_id in trunk_node_ids:
-                    if len(trunk_graph[node_id]) <= 1:
-                        end_node_ids.append(node_id)
-
-                # choose start, not necessarily first in unconnected nodes
-                # get the 2 unconnected end points with the highest closest distance to any other endpoint
-                furthest_distance_1 = furthest_distance_2 = -1.0
-                furthest_index_1 = furthest_index_2 = None
-                end_node_count = len(end_node_ids)
-                for index_1 in range(end_node_count):
-                    node_id_1 = end_node_ids[index_1]
-                    x_1 = nid_coords[node_id_1]
-                    closest_distance = float('inf')
-                    for index_2 in range(end_node_count):
-                        if index_2 != index_1:
-                            node_id_2 = end_node_ids[index_2]
-                            dist = distance(x_1, nid_coords[node_id_2])
-                            if dist < closest_distance:
-                                closest_distance = dist
-                    if closest_distance > furthest_distance_2:
-                        if closest_distance > furthest_distance_1:
-                            furthest_distance_2 = furthest_distance_1
-                            furthest_index_2 = furthest_index_1
-                            furthest_distance_1 = closest_distance
-                            furthest_index_1 = index_1
-                        else:
-                            furthest_distance_2 = closest_distance
-                            furthest_index_2 = index_1
-
-                start_index = furthest_index_1 if furthest_index_1 < furthest_index_2 else furthest_index_2
-                start = end_node_ids[start_index]
-
-                trunk_path_ids = []
-                # BFS from first to next unconnected, all connected in one long path
-                while len(end_node_ids) > 0:
-                    end_node_ids.pop(start_index)
-                    if start not in trunk_path_ids:
-                        local_trunk_path_ids = bfs_to_furthest(trunk_graph, start, trunk_path_ids)
-                        trunk_path_ids.extend(local_trunk_path_ids)
-
-                    # find next closest unconnected node
-                    closest_distance = math.inf
-                    last_node_id_in_path = trunk_path_ids[-1]
-                    for index, node_id in enumerate(end_node_ids):
-                        dist = distance(nid_coords[node_id], nid_coords[last_node_id_in_path])
-                        if dist < closest_distance:
-                            closest_distance = dist
-                            start = node_id
-                            start_index = index
-
-                # get one of the top markers to check if trunk path needs to be reversed
-                if self._side_label == 'left':
-                    markers_ordered_list = get_left_vagus_marker_locations_list()
-                else:
-                    markers_ordered_list = get_right_vagus_marker_locations_list()
-
-                for marker_name in markers_ordered_list.keys():
-                    if marker_name in self._level_markers.keys():
-                        top_marker = self._level_markers[marker_name]
-                        break
-                start_dist = distance(nid_coords[trunk_path_ids[0]], top_marker)
-                end_dist = distance(nid_coords[trunk_path_ids[-1]], top_marker)
-                if trunk_path_ids and end_dist < start_dist:
-                    trunk_path_ids.reverse()
-
-                ordered_trunk_coordinates = []
-                for trunk_path_id in trunk_path_ids:
-                    index = trunk_node_ids.index(trunk_path_id)
-                    ordered_trunk_coordinates.append(trunk_coordinates[index])
-
-            if len(trunk_elements) > 0 and trunk_path_ids:
-                self._trunk_coordinates = ordered_trunk_coordinates[:]
-            else:
-                self._trunk_coordinates = trunk_coordinates[:]
-
-            if radius and not all(value == 0.0 for value in trunk_radius):
-                if len(trunk_elements) > 0 and trunk_path_ids:
-                    ordered_trunk_radius = []
-                    for trunk_path_id in trunk_path_ids:
-                        index = trunk_node_ids.index(trunk_path_id)
-                        ordered_trunk_radius.append(trunk_radius[index])
-                    self._trunk_radius = ordered_trunk_radius[:]
-                else:
-                    self._trunk_radius = trunk_radius[:]
+            self._trunk_coordinates = trunk_coordinates
+            self._trunk_radius = trunk_radius
 
         # extract branch data - name, coordinates, nodes, radius
         for branch_name in branch_group_names:
@@ -495,7 +385,8 @@ class VagusInputData:
         Get segment trunk information gleaned from each .exf file read into segmentations stitcher, recognized by
         group names ending in '.exf', but not containing '.exf' multiple times as for connection groups.
         These are in order down the nerve.
-        :return: list of segment info dict with at least fields: 'name', 'unordered_coordinates'/
+        :return: list of segment info dict with at least fields: 'name', 'unordered_coordinates', 'ordered_points',
+        'centroid', 'range'. 'ordered_coordinates' is present iff a single polyline crosses the segment.
         """
         return self._segment_trunk_info_list
 
@@ -617,12 +508,19 @@ def make_segment_trunk_info(fieldmodule, fieldcache, coordinates, nodes, mesh1d,
                 mean_coordinates = fieldmodule.createFieldNodesetMean(coordinates, segment_trunk_nodeset_group)
                 result, centroid = mean_coordinates.evaluateReal(fieldcache, 3)
                 del mean_coordinates
+                minimum_coordinates = fieldmodule.createFieldNodesetMinimum(coordinates, segment_trunk_nodeset_group)
+                result, min_x = minimum_coordinates.evaluateReal(fieldcache, 3)
+                del minimum_coordinates
+                maximum_coordinates = fieldmodule.createFieldNodesetMaximum(coordinates, segment_trunk_nodeset_group)
+                result, max_x = maximum_coordinates.evaluateReal(fieldcache, 3)
+                del maximum_coordinates
                 segment_trunk_info = {
                     'name': group_name,
                     'first_node_id': first_node_id,
                     'nodeset_group': segment_trunk_nodeset_group,
                     'unordered_coordinates': unordered_coordinates,
-                    'centroid': centroid
+                    'centroid': centroid,
+                    'range': [min_x, max_x]
                 }
                 # ensure in order of lowest node in segment which should be from top to bottom of nerve
                 for i, other_segment_info in enumerate(segment_trunk_info_list):
@@ -681,6 +579,9 @@ def make_segment_trunk_info(fieldmodule, fieldcache, coordinates, nodes, mesh1d,
                         last_node_id = node_id
                         node_id = connected_node_id
                     segment_trunk_info['ordered_coordinates'] = ordered_coordinates
+                del segment_trunk_mesh_group
+                del segment_trunk_nodeset_group
+                del segment_trunk_group
         del is_trunk
 
         # add segment coordinates/point order
@@ -740,6 +641,9 @@ def make_segment_trunk_info(fieldmodule, fieldcache, coordinates, nodes, mesh1d,
                 else:
                     xi_list = [0.25, 1.0]
                 ordered_points = [add(mult(min_x, 1.0 - xi), mult(max_x, xi)) for xi in xi_list]
+            # don't want these left behind
+            del segment_trunk_info['nodeset_group']
+            del nodeset_group
             segment_trunk_info['ordered_points'] = ordered_points
             prev_centroid = centroid
 

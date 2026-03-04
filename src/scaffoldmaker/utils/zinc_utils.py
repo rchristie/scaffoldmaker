@@ -976,18 +976,17 @@ def fit_hermite_curve(bx, bd1, px, outlier_length=0.0, region=None, group_name=N
     fitter.defineCommonMeshFields()
     fitter.setDataCoordinatesField(coordinates)
     fitter.defineDataProjectionFields()
-    # aim for no more than 25 points per element:
-    points_per_element = 25
-    data_proportion = min(1.0, points_per_element * elements_count / points_count)
-    if data_proportion < 1.0:
-        fitter.getInitialFitterStepConfig().setGroupDataProportion(None, data_proportion)
     fitter.initializeFit()
 
+    # calibrated for 25 points / element
+    data_weight = (25.0 * elements_count) / points_count
+    strain_penalty = 1.0E-6 * curve_length
     # calibrated by scaling the model: a power of 3 relationship
-    curvature_penalty = ((points_count * data_proportion) / (points_per_element * elements_count) *
-                         1.0E-6 * (curve_length ** 3))
+    curvature_penalty = 1.0E-6 * (curve_length ** 3)
     fit1 = FitterStepFit()
     fitter.addFitterStep(fit1)
+    fit1.setGroupDataWeight(None, data_weight)
+    fit1.setGroupStrainPenalty(None, [strain_penalty])
     fit1.setGroupCurvaturePenalty(None, [curvature_penalty])
     fit1.run()
     del fit1
