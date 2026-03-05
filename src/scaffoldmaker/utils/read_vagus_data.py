@@ -386,7 +386,9 @@ class VagusInputData:
         group names ending in '.exf', but not containing '.exf' multiple times as for connection groups.
         These are in order down the nerve.
         :return: list of segment info dict with at least fields: 'name', 'unordered_coordinates', 'ordered_points',
-        'centroid', 'range'. 'ordered_coordinates' is present iff a single polyline crosses the segment.
+        'centroid', 'range'. 'ordered_coordinates' is only present if a single polyline crosses the segment.
+        'ordered_points' is the same as 'ordered_coordinates' (if present) otherwise it is 2 points along the mean
+        direction of the segment relative to its neighbours (for multi-path segments).
         """
         return self._segment_trunk_info_list
 
@@ -593,7 +595,9 @@ def make_segment_trunk_info(fieldmodule, fieldcache, coordinates, nodes, mesh1d,
             next_centroid = segment_trunk_info_list[s + 1]['centroid'] if s < (s_count - 1) else None
             nodeset_group = segment_trunk_info['nodeset_group']
             ordered_coordinates = segment_trunk_info.get('ordered_coordinates')
-            print(segment_trunk_info['name'], 'single path' if ordered_coordinates else 'complex path')
+            # print(segment_trunk_info['name'], 'single path' if ordered_coordinates else 'multi-path')
+            if not ordered_coordinates:
+                logger.info('Segment ' + segment_trunk_info['name'] + ' is multi-path')
             direction = None
             if s_count == 1:
                 if ordered_coordinates:
