@@ -333,23 +333,23 @@ def get_left_vagus_marker_locations_list():
     # vagus markers location in material coordinates between 0 to 1
     left_termNameVagusLengthList = {
         # cervical region
-        "left level of superior border of jugular foramen on the vagus nerve": 0.044, # was 0.02737296,
-        "left level of inferior border of jugular foramen on the vagus nerve": 0.06, # was 0.04434952,
-        # "left level of inferior border of cranium on the vagus nerve": 0.072, # was 0.0588,
-        # "left level of C1 transverse process on the vagus nerve": 0.111, # was 0.10276128,
-        "left level of angle of the mandible on the vagus nerve": 0.131, # was 0.12533074,
-        # "left level of greater horn of hyoid on the vagus nerve": 0.149, # was 0.14595904,
-        "left level of carotid bifurcation on the vagus nerve": 0.166, # was 0.15738364,
-        "left level of laryngeal prominence on the vagus nerve": 0.214, # was 0.20541934,
+        "left level of superior border of jugular foramen on the vagus nerve": 0.044,
+        "left level of inferior border of jugular foramen on the vagus nerve": 0.06, # standardized
+        # "left level of inferior border of cranium on the vagus nerve": 0.072,
+        # "left level of C1 transverse process on the vagus nerve": 0.111,
+        "left level of angle of the mandible on the vagus nerve": 0.131,
+        # "left level of greater horn of hyoid on the vagus nerve": 0.149,
+        "left level of carotid bifurcation on the vagus nerve": 0.166, # calibrated to Feinstein REVA data
+        "left level of laryngeal prominence on the vagus nerve": 0.214, # calibrated to Feinstein REVA data
         # thoracic region
-        "left level of superior border of the clavicle on the vagus nerve": 0.320, # was 0.33847976,
-        "left level of jugular notch on the vagus nerve": 0.356, # was 0.38062311,
-        "left level of sternal angle on the vagus nerve": 0.447, # was 0.48395264,
-        # "left level of 1 cm superior to start of esophageal plexus on the vagus nerve": 0.487, # was 0.52988032,
+        "left level of superior border of the clavicle on the vagus nerve": 0.320, # standardized
+        "left level of jugular notch on the vagus nerve": 0.356,
+        "left level of sternal angle on the vagus nerve": 0.447,
+        # "left level of 1 cm superior to start of esophageal plexus on the vagus nerve": 0.487,
         # abdominal region
-        # "left level of esophageal hiatus on the vagus nerve": 0.738, # was 0.813852428,
-        # "left level of aortic hiatus on the vagus nerve": 0.842, # was 0.9323824,
-        # "left level of end of trunk": 0.902, # was 1.0  # note this term is also not on the list of annotations
+        # "left level of esophageal hiatus on the vagus nerve": 0.738,
+        # "left level of aortic hiatus on the vagus nerve": 0.842,
+        # "left level of end of trunk": 0.902, # note this term is also not on the list of annotations
     }
     return left_termNameVagusLengthList
 
@@ -358,22 +358,22 @@ def get_right_vagus_marker_locations_list():
     # vagus markers location in material coordinates between 0 to 1
     right_termNameVagusLengthList = {
         # cervical region
-        "right level of superior border of jugular foramen on the vagus nerve": 0.044, # was 0.02762944,
-        "right level of inferior border of jugular foramen on the vagus nerve": 0.06, # was 0.04434952,
-        # "right level of inferior border of cranium on the vagus nerve": 0.072, # was 0.0588,
-        # "right level of C1 transverse process on the vagus nerve": 0.111, # was 0.10276128,
-        "right level of angle of the mandible on the vagus nerve": 0.131, # was 0.12648368,
-        # "right level of greater horn of hyoid on the vagus nerve": 0.149, # was 0.14595904,
-        "right level of carotid bifurcation on the vagus nerve": 0.166, # was 0.17798550,
-        "right level of laryngeal prominence on the vagus nerve": 0.214, # was 0.23144827,
+        "right level of superior border of jugular foramen on the vagus nerve": 0.044,
+        "right level of inferior border of jugular foramen on the vagus nerve": 0.06, # standardized
+        # "right level of inferior border of cranium on the vagus nerve": 0.072,
+        # "right level of C1 transverse process on the vagus nerve": 0.111,
+        "right level of angle of the mandible on the vagus nerve": 0.131,
+        # "right level of greater horn of hyoid on the vagus nerve": 0.149,
+        "right level of carotid bifurcation on the vagus nerve": 0.166, # calibrated to Feinstein REVA data
+        "right level of laryngeal prominence on the vagus nerve": 0.214, # calibrated to Feinstein REVA data
         # thoracic region
-        "right level of superior border of the clavicle on the vagus nerve": 0.320, # was 0.33948916,
-        "right level of jugular notch on the vagus nerve": 0.356, # was 0.38937585,
-        "right level of sternal angle on the vagus nerve": 0.447, # was 0.48764507,
-        # "right level of 1 cm superior to start of esophageal plexus on the vagus nerve": 0.487, # was 0.52988032,
+        "right level of superior border of the clavicle on the vagus nerve": 0.320, # standardized
+        "right level of jugular notch on the vagus nerve": 0.356,
+        "right level of sternal angle on the vagus nerve": 0.447,
+        # "right level of 1 cm superior to start of esophageal plexus on the vagus nerve": 0.487,
         # abdominal region
-        # "right level of esophageal hiatus on the vagus nerve": 0.738, # was 0.813852428,
-        # "right level of aortic hiatus on the vagus nerve": 0.842, # was 0.9323824,
+        # "right level of esophageal hiatus on the vagus nerve": 0.738,
+        # "right level of aortic hiatus on the vagus nerve": 0.842,
     }
     return right_termNameVagusLengthList
 
