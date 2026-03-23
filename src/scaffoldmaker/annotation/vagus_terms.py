@@ -153,7 +153,7 @@ vagus_branch_terms = [
     ("inferior cervical cardiac branch of right vagus nerve", "ILX:0789456", "FMA:6713"),
     ("thoracic cardiac branch of right vagus nerve", "ILX:0790057", "FMA:53604"),
     ("cardiac branch of right vagus to deep cardiac plexus", "ILX:0791784", "FMA:6711"),
-    ("right branch of thoracic vagus nerve to esophagus", "ILX:0794299"),  # , "right branch of right vagus nerve to esophageal nerve plexus"
+    ("right branch of thoracic vagus nerve to esophagus", "ILX:0794299"),
     ("right branch between cranial nerve bundle and superior cervical ganglion", "ILX:0796398"),
     ("right branch between thoracic vagus nerve and 'branch between thoracic vagus nerve and thoracic vagus nerve'", "ILX:0794837"),
     ("right branch between of thoracic vagus nerve and esophagus plexus", "ILX:0796071", "right branch of thoracic vagus nerve to esophageal plexus"),

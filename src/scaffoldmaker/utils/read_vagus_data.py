@@ -69,7 +69,7 @@ class VagusInputData:
         for group in group_list:
             group_name = group.getName().strip()
             lower_name = group_name.casefold()
-            if any([keyword in lower_name for keyword in self._term_keywords]):
+            if any(keyword in lower_name for keyword in self._term_keywords):
                 term_annotation_names.append(group_name)
             else:
                 annotation_names.append(group_name)
