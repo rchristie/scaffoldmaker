@@ -320,8 +320,8 @@ class VagusScaffoldTestCase(unittest.TestCase):
                 },
                 'trunk centroid fit error rms': 2.6851948642256804,
                 'trunk centroid fit error max': 7.904921997395714,
-                'trunk radius fit error rms': 1.2238073628715136,
-                'trunk radius fit error max': 3.5523677673120915,
+                'trunk radius fit error rms': 1.2305944659632673,
+                'trunk radius fit error max': 4.805861361946540,
                 'trunk twist angle fit error degrees rms': 4.242842001426614,
                 'trunk twist angle fit error degrees max': 10.680695634612922}
             self.assertEqual(len(metadata), len(expected_metadata))
@@ -343,16 +343,16 @@ class VagusScaffoldTestCase(unittest.TestCase):
                     'http://uri.interlex.org/base/ilx_0785628', None, 25,
                     [-2545.1416627882127, -5922.876303368227, -120.13687087625989],
                     [2617.531313476152, -1114.5818014848053, 124.21189836073981],
-                    [60.84462037979665, 308.94363309232904, 1490.0364173736891],
-                    282971429.0018689,
-                    38807595771.62844),
+                    [24.39094150015535, 123.8470391394294, 597.3147808697659],
+                    298146928.6998187,
+                    40461678815.09406),
                 'left superior laryngeal nerve': (
                     'http://uri.interlex.org/base/ilx_0788780', 'left vagus nerve', 3,
                     [5917.435264569445, -4445.778660101648, -197.01444269512928],
                     [-2234.989761439478, 1225.7350194397827, 53.8705143512821],
                     [28.44718777675007, 26.16951319188047, 584.7778704390983],
                     14882367.91175587,
-                    956941502.0198767),
+                    956967348.3795375),
                 'left A branch of superior laryngeal nerve': (
                     'http://uri.interlex.org/base/ilx_0795823', 'left superior laryngeal nerve', 1,
                     [5106.509650289892, -1452.6499210530492, -0.984447873629037],
@@ -466,14 +466,14 @@ class VagusScaffoldTestCase(unittest.TestCase):
             xi_centre = [0.5, 0.5, 0.5]
             # (element_identifier, expected_d3)
             expected_d3_info = [
-                (2, [8.938095496739777, 220.70367299268884, 1252.450534060051]),
-                (4, [-540.6811548301578, 557.017275943351, 885.7586665576557]),
+                (2, [9.013362905918797, 220.67683423586948, 1253.9368646031025]),
+                (4, [-540.7046854637476, 557.0087432132405, 885.8843859625747]),
                 (6, [-21.07982471183135, 631.6754046801419, 213.24039053644293]),
                 (8, [-5.942146193228439, 99.04074650223203, 695.7708187934098]),
-                (10, [-127.88986972176042, -444.50644446066275, 519.3138402534729]),
-                (12, [-1.2179623777006725, -527.0056021355471, 150.45247980670015]),
-                (14, [0.660371131072452, -478.9608609517689, 107.47087282611166]),
-                (16, [0.41875875015409747, -479.5949652529947, 103.3546407445312])]
+                (10, [-127.92137965165844, -444.55692634136125, 519.3176530902194]),
+                (12, [-1.0950196735342104, -527.6541668835855, 150.5585990241353]),
+                (14, [0.8092319879065144, -609.1485985950429, 136.81586102632178]),
+                (16, [0.5125120094647002, -586.9835413019306, 126.49765382229441])]
             for element_identifier, expected_d3 in expected_d3_info:
                 element = mesh3d.findElementByIdentifier(element_identifier)
                 self.assertEqual(RESULT_OK, fieldcache.setMeshLocation(element, xi_centre))
@@ -494,7 +494,7 @@ class VagusScaffoldTestCase(unittest.TestCase):
                 fieldcache.clearLocation()
                 result, volume = volume_field.evaluateReal(fieldcache, 1)
                 self.assertEqual(result, RESULT_OK)
-                expected_volume = 38807595771.62844 if (coordinate_field is coordinates) else 38857554452.92854
+                expected_volume = 40461678815.09406 if (coordinate_field is coordinates) else 40507750572.8512
                 self.assertAlmostEqual(expected_volume, volume, delta=STOL)
                 expected_elements_count = 32
                 group = fieldmodule.findFieldByName("epineurium").castGroup()
@@ -505,7 +505,7 @@ class VagusScaffoldTestCase(unittest.TestCase):
                 fieldcache.clearLocation()
                 result, surface_area = surface_area_field.evaluateReal(fieldcache, 1)
                 self.assertEqual(result, RESULT_OK)
-                expected_surface_area = 83233470.63194486 if (coordinate_field is coordinates) else 83433793.91531338
+                expected_surface_area = 87526323.35084978 if (coordinate_field is coordinates) else 87725374.93691172
                 self.assertAlmostEqual(expected_surface_area, surface_area, delta=STOL)
                 group = fieldmodule.findFieldByName("vagus centroid").castGroup()
                 mesh_group1d = group.getMeshGroup(mesh1d)

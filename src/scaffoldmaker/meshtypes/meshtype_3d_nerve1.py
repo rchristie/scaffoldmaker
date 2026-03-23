@@ -1390,10 +1390,11 @@ def generate_trunk_1d(vagus_data, trunk_proportion, trunk_elements_count_prefit,
                 result, x = coordinates.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_VALUE, 1, components_count)
                 tx.append(x)
             node = nodeiterator.next()
-        field_names_and_values = [("radius", [default_trunk_diameter * 0.5] * len(tx))]
-        data_identifier = generate_datapoints(
-            fit_region, tx, data_identifier, field_names_and_values=field_names_and_values, group_name=trunk_group_name)
-        radius = fieldmodule.findFieldByName("radius").castFiniteElement()
+        if tx:
+            field_names_and_values = [("radius", [default_trunk_diameter * 0.5] * len(tx))]
+            data_identifier = generate_datapoints(
+                fit_region, tx, data_identifier, field_names_and_values=field_names_and_values, group_name=trunk_group_name)
+            radius = fieldmodule.findFieldByName("radius").castFiniteElement()
 
         # add projection distance to radius
         trunk_location = fieldmodule.createFieldFindMeshLocation(coordinates, coordinates, mesh1d)
