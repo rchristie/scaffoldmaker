@@ -31,7 +31,7 @@ class VagusInputData:
 
         self._trunk_keywords = ['cervical vagus nerve', 'thoracic vagus nerve',
                                 'cervical trunk', 'thoracic trunk', 'vagus x nerve trunk']
-        self._branch_keywords = ['branch', 'nerve', 'ganglion']
+        self._branch_keywords = ['branch', 'nerve', 'ganglion', 'fusion']
         self._non_branch_keywords = ['perineurium', 'epineurium']
         self._term_keywords = ['fma:', 'fma_', 'ilx:', 'ilx_', 'uberon:', 'uberon_']
         self._orientation_keywords = ['orientation']
