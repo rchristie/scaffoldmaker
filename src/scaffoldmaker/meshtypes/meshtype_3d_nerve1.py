@@ -1,6 +1,7 @@
 from cmlibs.maths.vectorops import (
     add, cross, distance, dot, magnitude, matrix_mult, matrix_inv, mult, normalize, rejection, set_magnitude, sub)
 from cmlibs.utils.zinc.field import find_or_create_field_group, find_or_create_field_coordinates
+from cmlibs.utils.zinc.finiteelement import evaluate_field_nodeset_range
 from cmlibs.utils.zinc.general import ChangeManager
 from cmlibs.zinc.element import Element, Elementbasis, Elementfieldtemplate
 from cmlibs.zinc.field import Field, FieldFindMeshLocation, FieldGroup
@@ -1361,11 +1362,39 @@ def generate_trunk_1d(vagus_data, trunk_proportion, trunk_elements_count_prefit,
     rms_error, max_error = fitter.getDataRMSAndMaximumProjectionError(trunk_group.getNodesetGroup(datapoints))
     nerve_metadata.set_name_rms_max_error("trunk centroid fit error", rms_error, max_error)
 
+    with ChangeManager(fieldmodule):
+        # make a real field which increases down the trunk proportional to vagus coordinates
+        trunk_distance = (fieldmodule.findFieldByName("cmiss_number") +
+                          fieldmodule.createFieldComponent(fieldmodule.findFieldByName("xi"), 1))
+        host_trunk_distance = fieldmodule.createFieldEmbedded(trunk_distance, fitter.getDataHostLocationField())
+        minimums, maximums = evaluate_field_nodeset_range(host_trunk_distance, trunk_group.getNodesetGroup(datapoints))
+        min_projection_node_number = math.ceil(minimums)
+        max_projection_node_number = math.floor(maximums)
+        del host_trunk_distance
+
     fitter.cleanup()
     del fitter
 
     # fit radius
     if pr:
+        # add default radius points at trunk nodes outside range of radius data projections
+        tx = []
+        fieldcache = fieldmodule.createFieldcache()
+        nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+        nodeiterator = nodes.createNodeiterator()
+        node = nodeiterator.next()
+        for n in range(trunk_elements_count + 1):
+            nodeIdentifier = node.getIdentifier()
+            if (nodeIdentifier < min_projection_node_number) or (nodeIdentifier > max_projection_node_number):
+                fieldcache.setNode(node)
+                result, x = coordinates.getNodeParameters(fieldcache, -1, Node.VALUE_LABEL_VALUE, 1, components_count)
+                tx.append(x)
+            node = nodeiterator.next()
+        if tx:
+            field_names_and_values = [("radius", [default_trunk_diameter * 0.5] * len(tx))]
+            data_identifier = generate_datapoints(
+                fit_region, tx, data_identifier, field_names_and_values=field_names_and_values, group_name=trunk_group_name)
+
         # add projection distance to radius
         trunk_location = fieldmodule.createFieldFindMeshLocation(coordinates, coordinates, mesh1d)
         trunk_location.setSearchMode(trunk_location.SEARCH_MODE_NEAREST)
@@ -1376,7 +1405,7 @@ def generate_trunk_1d(vagus_data, trunk_proportion, trunk_elements_count_prefit,
         fieldassignment = radius.createFieldassignment(new_radius)
         fieldassignment.setNodeset(trunk_datapoints)
         fieldassignment.assign()
-        gradient1_penalty = 1000.0 * points_count_calibration_factor * length_calibration_factor
+        gradient1_penalty = 10000.0 * points_count_calibration_factor * length_calibration_factor
         gradient2_penalty = 1.0E+8 * points_count_calibration_factor * (length_calibration_factor ** 3)
         rms_error, max_error = define_and_fit_field(
             fit_region, "coordinates", "coordinates", "radius",
