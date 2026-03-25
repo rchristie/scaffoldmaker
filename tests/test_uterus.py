@@ -36,7 +36,7 @@ class UterusScaffoldTestCase(unittest.TestCase):
 
         networkLayout = options.get("Network layout")
         networkLayoutSettings = networkLayout.getScaffoldSettings()
-        self.assertEqual("1-2-3-4-5-6-7-8-23.1,9-10-11-12-13-14-15-16-23.2,#-17-18-19-20-21-22-23.3,"
+        self.assertEqual("1-2-3-4-5-6-7-8-23.1,9-10-11-12-13-14-15-16-23.2,#17-18-19-20-21-22-23.3,"
                          "23.4-24-25-26-27-28-29,29-30-31,31-32-33-34-35-36-37-38",
                          networkLayoutSettings["Structure"])
 
@@ -69,7 +69,7 @@ class UterusScaffoldTestCase(unittest.TestCase):
         self.assertTrue(coordinates.isValid())
         minimums, maximums = evaluateFieldNodesetRange(coordinates, nodes)
         assertAlmostEqualList(self, minimums, [-2.999999999999999, -14.0, -8.268270767743472], 1.0E-6)
-        assertAlmostEqualList(self, maximums, [12.947480545068354, 14.0, 2.991966625368734], 1.0E-6)
+        assertAlmostEqualList(self, maximums, [12.947480545068354, 14.0, 2.9919276762970517], 1.0E-6)
 
         with ChangeManager(fieldmodule):
             one = fieldmodule.createFieldConstant(1.0)
@@ -83,8 +83,8 @@ class UterusScaffoldTestCase(unittest.TestCase):
         self.assertEqual(result, RESULT_OK)
         result, volume = volumeField.evaluateReal(fieldcache, 1)
         self.assertEqual(result, RESULT_OK)
-        self.assertAlmostEqual(surfaceArea, 326.53374476529103, delta=5.0E-2)
-        self.assertAlmostEqual(volume, 250.8430658356537, delta=5.0E-2)
+        self.assertAlmostEqual(surfaceArea, 326.7274574173959, delta=5.0E-2)
+        self.assertAlmostEqual(volume, 251.02652308118212, delta=5.0E-2)
 
         fieldmodule.defineAllFaces()
         for annotationGroup in annotationGroups:

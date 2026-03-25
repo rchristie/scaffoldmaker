@@ -187,11 +187,14 @@ def computeCubicHermiteEndDerivative(v1, d1, v2, d2_in):
     :return: Scaled d2
     """
     d1_mag = magnitude(d1)
-    d2 = set_magnitude(d2_in, 0.5 * d1_mag)
+    d2_in_mag = magnitude(d2_in)
+    if d2_in_mag == 0.0:
+        return copy.copy(d2_in)
+    d2 = mult(d2_in, 0.5 * d1_mag / d2_in_mag)
     for iters in range(100):
         arcLength = getCubicHermiteArcLength(v1, d1, v2, d2)
         d2_mag = 2.0 * arcLength - d1_mag
-        d2 = set_magnitude(d2_in, d2_mag)
+        d2 = mult(d2_in, d2_mag / d2_in_mag)
         if math.fabs(2.0 * arcLength - d1_mag - d2_mag) < (1.0E-6 * arcLength):
             break
     else:
@@ -267,6 +270,10 @@ def getCubicHermiteTrimmedCurvesLengths(cx, cd1, startLocation=None, endLocation
     :return: Length before start, length between start and end, length after end, list of lengths to nodes.
     """
     elementsCount = len(cx) - 1
+    if startLocation:
+        assert 0 <= startLocation[0] < elementsCount
+    if endLocation:
+        assert 0 <= endLocation[0] < elementsCount
     lengthToNode = [0.0]
     length = 0.0
     for e in range(elementsCount):
@@ -849,7 +856,8 @@ def smoothCubicHermiteDerivativesLine(nx, nd1,
         if not fixStartDerivative:
             if fixAllDirections or fixStartDirection:
                 mag = 2.0*arcLengths[0] - magnitude(lastmd1[1])
-                md1[0] = set_magnitude(nd1[0], mag) if (mag > 0.0) else [ 0.0, 0.0, 0.0 ]
+                old_mag = magnitude(nd1[0])
+                md1[0] = mult(nd1[0], mag / old_mag) if ((old_mag > 0.0) and (mag > 0.0)) else [0.0] * componentsCount
             else:
                 md1[0] = interpolateLagrangeHermiteDerivative(nx[0], nx[1], lastmd1[1], 0.0)
         # middle
@@ -876,12 +884,14 @@ def smoothCubicHermiteDerivativesLine(nx, nd1,
                 mag = 0.5 * (dnm + dn)
             else: # harmonicMeanMagnitude
                 mag = 2.0 / (1.0 / dnm + 1.0 / dn)
-            md1[n] = set_magnitude(md1[n], mag)
+            old_mag = magnitude(md1[n])
+            md1[n] = mult(md1[n], mag / old_mag) if (old_mag > 0.0) else [0.0] * componentsCount
         # end
         if not fixEndDerivative:
             if fixAllDirections or fixEndDirection:
                 mag = 2.0*arcLengths[-1] - magnitude(lastmd1[-2])
-                md1[-1] = set_magnitude(nd1[-1], mag) if (mag > 0.0) else [ 0.0, 0.0, 0.0 ]
+                old_mag = magnitude(nd1[-1])
+                md1[-1] = mult(nd1[-1], mag / old_mag) if ((old_mag > 0.0) and (mag > 0.0)) else [0.0] * componentsCount
             else:
                 md1[-1] = interpolateHermiteLagrangeDerivative(nx[-2], lastmd1[-2], nx[-1], 1.0)
         if instrument:
@@ -1105,7 +1115,8 @@ def smoothCubicHermiteDerivativesLoop(nx, nd1,
                 mag = 0.5*(arcLengths[nm] + arcLengths[n])
             else: # harmonicMeanMagnitude
                 mag = 2.0/(1.0/arcLengths[nm] + 1.0/arcLengths[n])
-            md1[n] = set_magnitude(md1[n], mag)
+            old_mag = magnitude(md1[n])
+            md1[n] = mult(md1[n], mag / old_mag) if (old_mag > 0.0) else [0.0] * componentsCount
         if instrument:
             print('iter', iter + 1, md1)
         dtol = tol*sum(arcLengths)/len(arcLengths)

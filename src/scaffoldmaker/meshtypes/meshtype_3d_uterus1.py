@@ -18,11 +18,10 @@ from scaffoldmaker.utils.eft_utils import determineCubicHermiteSerendipityEft, H
 from scaffoldmaker.utils.interpolation import smoothCurveSideCrossDerivatives, smoothCubicHermiteDerivativesLine, \
     interpolateCubicHermite, sampleCubicHermiteCurves, computeCubicHermiteDerivativeScaling, \
     interpolateLagrangeHermiteDerivative
-from scaffoldmaker.utils.networkmesh import NetworkMesh, pathValueLabels
-from scaffoldmaker.utils.tubenetworkmesh import TubeNetworkMeshBuilder, TubeNetworkMeshGenerateData, \
-    PatchTubeNetworkMeshSegment
-from scaffoldmaker.utils.zinc_utils import group_add_connected_elements, get_nodeset_path_ordered_field_parameters, \
-    find_first_node_conditional, get_node_mesh_location
+from scaffoldmaker.utils.networkmesh import NetworkMesh
+from scaffoldmaker.utils.tubenetworkmesh import BodyTubeNetworkMeshBuilder, TubeNetworkMeshGenerateData
+from scaffoldmaker.utils.zinc_utils import (
+    find_first_node_conditional, get_node_mesh_location, group_add_connected_elements)
 import copy
 import math
 
@@ -43,7 +42,7 @@ class UterusTubeNetworkMeshGenerateData(TubeNetworkMeshGenerateData):
         self._fundusGroup = self.getOrCreateAnnotationGroup(get_uterus_term("fundus of uterus"))
         self._bodyGroup = self.getOrCreateAnnotationGroup(get_uterus_term("body of uterus"))
         self._bodyNotCervixGroup = self.getOrCreateAnnotationGroup(("body not cervix", ""))
-        # force these annotation group names in base class
+        # force these annotation group names in base class with these names
         self._leftGroup = self.getOrCreateAnnotationGroup(("left uterus", ""))
         self._rightGroup = self.getOrCreateAnnotationGroup(("right uterus", ""))
         self._dorsalGroup = self.getOrCreateAnnotationGroup(("dorsal uterus", ""))
@@ -65,48 +64,23 @@ class UterusTubeNetworkMeshGenerateData(TubeNetworkMeshGenerateData):
         return self._bodyNotCervixGroup.getMeshGroup(self._mesh)
 
 
-class UterusTubeNetworkMeshBuilder(TubeNetworkMeshBuilder):
+class UterusTubeNetworkMeshBuilder(BodyTubeNetworkMeshBuilder):
     """
-    Adds left, right, dorsal, ventral, fundus, body annotations.
-    Future: derive from BodyTubeNetworkMeshBuilder to get left/right/dorsal/ventral.
+    Adds body, cervix, fundus, oviduct annotations.
+    Derived from BodyTubeNetworkMeshBuilder to get left/right/dorsal/ventral.
     """
-    def createSegment(self, networkSegment):
-        if networkSegment.isPatch():
-            pathParametersList = [get_nodeset_path_ordered_field_parameters(
-                self._layoutNodes, self._layoutCoordinates, pathValueLabels,
-                networkSegment.getNodeIdentifiers(), networkSegment.getNodeVersions())]
-            if self._layoutInnerCoordinates:
-                pathParametersList.append(get_nodeset_path_ordered_field_parameters(
-                    self._layoutNodes, self._layoutInnerCoordinates, pathValueLabels,
-                    networkSegment.getNodeIdentifiers(), networkSegment.getNodeVersions()))
-            elementsCountAround = self._defaultElementsCountAround
-            elementsCountCoreBoxMinor = self._defaultElementsCountCoreBoxMinor
-            coreBoundaryScalingMode = self._defaultCoreBoundaryScalingMode
-
-            return PatchTubeNetworkMeshSegment(networkSegment, pathParametersList, elementsCountAround,
-                                               self._elementsCountThroughShell, self._isCore, elementsCountCoreBoxMinor,
-                                               self._elementsCountTransition, coreBoundaryScalingMode)
-
-        return super(UterusTubeNetworkMeshBuilder, self).createSegment(networkSegment)
 
     def generateMesh(self, generateData):
-        super(UterusTubeNetworkMeshBuilder, self).generateMesh(generateData)
-        # build temporary left/right dorsal/ventral groups
+        super(UterusTubeNetworkMeshBuilder, self).generateMesh(generateData, dorsalD3Side=False)
         mesh = generateData.getMesh()
         leftOviductMeshGroup = generateData.getLeftOviductMeshGroup()
         rightOviductMeshGroup = generateData.getRightOviductMeshGroup()
         fundusMeshGroup = generateData.getFundusMeshGroup()
         bodyMeshGroup = generateData.getBodyMeshGroup()
         bodyNotCervixMeshGroup = generateData.getBodyNotCervixMeshGroup()
-        leftMeshGroup = generateData.getLeftMeshGroup()
-        rightMeshGroup = generateData.getRightMeshGroup()
-        dorsalMeshGroup = generateData.getDorsalMeshGroup()
-        ventralMeshGroup = generateData.getVentralMeshGroup()
         for networkSegment in self._networkMesh.getNetworkSegments():
             segment = self._segments[networkSegment]
             annotationTerms = segment.getAnnotationTerms()
-            segment.addSideD3ElementsToMeshGroup(True, ventralMeshGroup)
-            segment.addSideD3ElementsToMeshGroup(False, dorsalMeshGroup)
             for annotationTerm in annotationTerms:
                 if "oviduct" in annotationTerm[0]:
                     elementsCountRim = segment.getElementsCountRim()
@@ -140,16 +114,6 @@ class UterusTubeNetworkMeshBuilder(TubeNetworkMeshBuilder):
                     segment.addAllElementsToMeshGroup(bodyNotCervixMeshGroup)
                 if "cervix" in annotationTerm[0]:
                     segment.addAllElementsToMeshGroup(bodyMeshGroup)
-                if "left" in annotationTerm[0]:
-                    segment.addAllElementsToMeshGroup(leftMeshGroup)
-                    break
-                if "right" in annotationTerm[0]:
-                    segment.addAllElementsToMeshGroup(rightMeshGroup)
-                    break
-            else:
-                # segment on main axis
-                segment.addSideD2ElementsToMeshGroup(True, leftMeshGroup)
-                segment.addSideD2ElementsToMeshGroup(False, rightMeshGroup)
 
 
 class Septum:
@@ -893,7 +857,7 @@ class MeshType_1d_uterus_network_layout1(MeshType_1d_network_layout1):
             options["Structure"] = (
                 "1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-16-36.1,"
                 "17-18-19-20-21-22-23-24-25-26-27-28-29-30-31-32-36.2,"
-                "#-33-34-35-36.3,"
+                "#33-34-35-36.3,"
                 "36.4-37-38-39,"
                 "39-40,"
                 "40-41-42")
@@ -918,7 +882,7 @@ class MeshType_1d_uterus_network_layout1(MeshType_1d_network_layout1):
             options["Structure"] = (
                 "1-2-3-4-5-6-7-8-9-31.1,"
                 "10-11-12-13-14-15-16-17-18-31.2,"
-                "#-19-20-21-22-23-24-25-26-27-28-29-30-31.3,"
+                "#19-20-21-22-23-24-25-26-27-28-29-30-31.3,"
                 "31.4-32-33-34-35-36-37-38-39-40-41-42-43,"
                 "43-44,"
                 "44-45-46-47-48")
@@ -943,7 +907,7 @@ class MeshType_1d_uterus_network_layout1(MeshType_1d_network_layout1):
             options["Structure"] = (
                 "1-2-3-4-5-6-7-8-23.1,"
                 "9-10-11-12-13-14-15-16-23.2,"
-                "#-17-18-19-20-21-22-23.3,"
+                "#17-18-19-20-21-22-23.3,"
                 "23.4-24-25-26-27-28-29,"
                 "29-30-31,"
                 "31-32-33-34-35-36-37-38")

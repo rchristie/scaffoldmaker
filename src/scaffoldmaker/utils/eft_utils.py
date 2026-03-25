@@ -1065,8 +1065,12 @@ def determineCubicHermiteSerendipityEft(mesh, nodeParameters, nodeLayouts):
             on = n ^ (1 << ed)
             if nodeOrder.index(on) > nodeOrder.index(n):
                 derivativeMagnitude = magnitude(elementDerivative)
-                newMagnitude = 2.0 / ((1.0 / oldDeltaMagnitude) + (1.0 / derivativeMagnitude))
-                elementDerivative = mult(elementDerivative, newMagnitude / derivativeMagnitude)
+                if (oldDeltaMagnitude > 0.0) and (derivativeMagnitude > 0.0):
+                    newMagnitude = 2.0 / ((1.0 / oldDeltaMagnitude) + (1.0 / derivativeMagnitude))
+                else:
+                    newMagnitude = (oldDeltaMagnitude + derivativeMagnitude) / 2.0
+                if derivativeMagnitude > 0.0:
+                    elementDerivative = mult(elementDerivative, newMagnitude / derivativeMagnitude)
                 # update other node delta to work in with this derivative
                 otherElementDerivative = (
                     interpolateHermiteLagrangeDerivative(nodeParameters[n][0], elementDerivative, nodeParameters[on][0], 1.0)
@@ -1144,7 +1148,9 @@ def addTricubicHermiteSerendipityEftParameterScaling(eft, scalefactors, nodePara
         xb = nodeParameters[nb][0]
         db = nodeParameters[nb][3]
         dbScaled = computeCubicHermiteEndDerivative(xa, da, xb, db)
-        scalefactor = magnitude(dbScaled) / magnitude(db)
+        mag_db = magnitude(db)
+        mag_dbScaled = magnitude(dbScaled)
+        scalefactor = mag_dbScaled / mag_db if ((mag_db > 0.0) and (mag_dbScaled > 0.0)) else 0.0
         addScalefactors.append(scalefactor)
     if version == 1:
         newScalefactors = scalefactors + addScalefactors if scalefactors else addScalefactors

@@ -13,8 +13,13 @@ from scaffoldmaker.utils.interpolation import (
     gaussWt4, gaussXi4, getCubicHermiteCurvesLength, interpolateCubicHermiteDerivative)
 from scaffoldmaker.utils.tracksurface import TrackSurface
 from abc import ABC, abstractmethod
+from enum import Enum
+import logging
 import math
 import sys
+
+
+logger = logging.getLogger(__name__)
 
 
 pathValueLabels = [
@@ -97,21 +102,54 @@ class NetworkNode:
         self._x = x
 
 
+class NetworkSegmentEndStyle(Enum):
+    PLAIN = 0
+    PATCH = 1
+    DOME = 2
+
+    @classmethod
+    def fromStartChar(cls, startChar):
+        if startChar == '#':
+            return cls.PATCH
+        if startChar == '(':
+            return cls.DOME
+        return cls.PLAIN
+
+    @classmethod
+    def fromEndChar(cls, endChar):
+        if endChar == '#':
+            return cls.PATCH
+        if endChar == ')':
+            return cls.DOME
+        return cls.PLAIN
+
+    def get_lower_name(self):
+        """
+        :return: Lower case style name.
+        """
+        return self.name.lower()
+
+
 class NetworkSegment:
     """
     Describes a segment of a network between junctions as a sequence of nodes with node derivative versions.
     """
 
-    def __init__(self, networkNodes: list, nodeVersions: list, isPatch):
+    def __init__(self, networkNodes: list, nodeVersions: list, endStyles=None):
         """
         :param networkNodes: List of NetworkNodes from start to end. Must be at least 2.
         :param nodeVersions: List of node versions to use for derivatives at network nodes.
-        :param isPatch: True if segment at the other end of the junction requires a patch.
+        :param endStyles: Optional list of two NetworkSegmentEndStyle values.
         """
         assert isinstance(networkNodes, list) and (len(networkNodes) > 1) and (len(nodeVersions) == len(networkNodes))
         self._networkNodes = networkNodes
         self._nodeVersions = nodeVersions
-        self._isPatch = isPatch
+        if endStyles:
+            assert len(endStyles) == 2
+            assert all(isinstance(endStyle, NetworkSegmentEndStyle) for endStyle in endStyles)
+            self._endStyles = endStyles
+        else:
+            self._endStyles = [NetworkSegmentEndStyle.PLAIN] * 2
         self._elementIdentifiers = [None] * (len(networkNodes) - 1)
         for networkNode in networkNodes[1:-1]:
             networkNode.setInteriorSegment(self)
@@ -162,11 +200,28 @@ class NetworkSegment:
         """
         return False  # not implemented, assume not cyclic
 
-    def isPatch(self):
+    def getEndStyle(self, index):
         """
-        :return: True if the segment is a patch, False if not.
+        :param index: 0 for start, 1 or -1 for end.
+        :return: NetworkSegmentEndStyle (PLAIN, PATCH, DOME etc.) at the requested end index.
         """
-        return self._isPatch
+        assert index in (0, 1, -1)
+        return self._endStyles[index]
+
+    def setEndStyle(self, index, endStyle):
+        """
+        :param index: 0 for start, 1 or -1 for end.
+        :param endStyle: NetworkSegmentEndStyle (PLAIN, PATCH, DOME etc.
+        """
+        assert index in (0, 1, -1)
+        assert isinstance(endStyle, NetworkSegmentEndStyle)
+        self._endStyles[index] = endStyle
+
+    def getEndStyles(self):
+        """
+        :return: list of start, end NetworkSegmentEndStyle types (PLAIN, PATCH, DOME etc.)
+        """
+        return self._endStyles
 
     def split(self, splitNetworkNode):
         """
@@ -215,18 +270,27 @@ class NetworkMesh(ConstructionObject):
         self._networkNodes = {}
         self._networkSegments = []
         sequenceStrings = structureString.split(",")
-        for sequenceString in sequenceStrings:
-            # check if segment is a patch
-            if not sequenceString[0].isnumeric():
-                try:
-                    isPatch = True if sequenceString[0] == "#" else False
-                    sequenceString = sequenceString[2:] if isPatch else sequenceString
-                except ValueError:
-                    print("Network mesh: Skipping invalid cap sequence", sequenceString, file=sys.stderr)
-                    continue
-            else:
-                isPatch = False
-
+        for rawSequenceString in sequenceStrings:
+            sequenceString = rawSequenceString.strip()
+            # check for end style strings
+            endStyles = [NetworkSegmentEndStyle.PLAIN] * 2
+            if sequenceString:
+                startChar = sequenceString[0]
+                if not startChar.isnumeric():
+                    endStyles[0] = NetworkSegmentEndStyle.fromStartChar(startChar)
+                    if endStyles[0] == NetworkSegmentEndStyle.PLAIN:
+                        logger.warning('NetworkMesh: invalid start char ' + startChar + ' in sequence string. Skipping.')
+                    sequenceString = sequenceString[1:]
+                    if (startChar == '#') and sequenceString and (sequenceString[0] == '-'):
+                        # allow old patch structure string with #- previously used by uterus scaffold
+                        sequenceString = sequenceString[1:]
+            if sequenceString:
+                endChar = sequenceString[-1]
+                if not endChar.isnumeric():
+                    endStyles[1] = NetworkSegmentEndStyle.fromEndChar(endChar)
+                    if endStyles[1] == NetworkSegmentEndStyle.PLAIN:
+                        logger.warning('NetworkMesh: invalid end char ' + endChar + ' in sequence string. Skipping')
+                    sequenceString = sequenceString[:-1]
             nodeIdentifiers = []
             nodeVersions = []
             nodeVersionStrings = sequenceString.split("-")
@@ -260,7 +324,7 @@ class NetworkMesh(ConstructionObject):
                 sequenceNodes.append(networkNode)
                 sequenceVersions.append(nodeVersion)
                 if (len(sequenceNodes) > 1) and (existingNetworkNode or (nodeIdentifier == nodeIdentifiers[-1])):
-                    networkSegment = NetworkSegment(sequenceNodes, sequenceVersions, isPatch)
+                    networkSegment = NetworkSegment(sequenceNodes, sequenceVersions, endStyles)
                     self._networkSegments.append(networkSegment)
                     sequenceNodes = sequenceNodes[-1:]
                     sequenceVersions = sequenceVersions[-1:]
@@ -274,6 +338,26 @@ class NetworkMesh(ConstructionObject):
             segmentNodes = networkSegment.getNetworkNodes()
             segmentNodes[0].addOutSegment(networkSegment)
             segmentNodes[-1].addInSegment(networkSegment)
+
+        # validate end styles
+        for networkSegment in self._networkSegments:
+            # check only plain end style on junctions
+            networkNodes = networkSegment.getNetworkNodes()
+            for index in [0, -1]:
+                endStyle = networkSegment.getEndStyle(index)
+                if endStyle != NetworkSegmentEndStyle.PLAIN:
+                    networkNode = networkNodes[index]
+                    segmentsCount = len(networkNode.getInSegments()) + len(networkNode.getOutSegments())
+                    if segmentsCount > 1:
+                        logger.warning('NetworkMesh: End style ' + endStyle.name +
+                                       ' at node ' + str(networkNode.getNodeIdentifier()) +
+                                       ' not permitted on a junction. Using PLAIN end style instead.')
+                        networkSegment.setEndStyle(index, NetworkSegmentEndStyle.PLAIN)
+                    elif (index == -1) and (endStyle == NetworkSegmentEndStyle.PATCH) and (segmentsCount == 1):
+                        logger.warning('NetworkMesh: End style ' + endStyle.name +
+                                       ' at node ' + str(networkNode.getNodeIdentifier()) +
+                                       ' only implemented on inlet to junction. Using PLAIN end style instead.')
+                        networkSegment.setEndStyle(index, NetworkSegmentEndStyle.PLAIN)
 
         # assign integer posX coordinates
         for _ in range(len(self._networkSegments)):  # limit total iterations so no endless loop
@@ -876,7 +960,7 @@ class NetworkMeshBuilder(ABC):
             if junctions[0] not in generatedJunctions:
                 junctions[0].generateMesh(generateData)
                 generatedJunctions.add(junctions[0])
-            if networkSegment.isPatch():
+            if NetworkSegmentEndStyle.PATCH in networkSegment.getEndStyles():
                 continue  # so as not to make patch mesh twice
             segment.generateMesh(generateData)
             if junctions[1] not in generatedJunctions:

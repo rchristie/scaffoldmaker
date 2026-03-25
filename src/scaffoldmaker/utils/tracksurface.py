@@ -1146,6 +1146,7 @@ class TrackSurface:
             cross_dr = cross(d, r)
             if magnitude(cross_dr) < (1.0E-6 * magnitude(d)):
                 rNormal = [0.0, 0.0, 0.0]
+                r_dot_n = 0.0
             else:
                 n = normalize(cross(cross_dr, d))
                 r_dot_n = dot(r, n)

@@ -1,25 +1,49 @@
 """
 Specialisation of Network Mesh for building 2-D and 3-D tube mesh networks.
 """
-from cmlibs.maths.vectorops import add, cross, dot, magnitude, mult, normalize, set_magnitude, sub, rejection
+from cmlibs.maths.vectorops import add, cross, div, dot, magnitude, mult, normalize, set_magnitude, sub, rejection
 from cmlibs.zinc.element import Element, Elementbasis
 from cmlibs.zinc.node import Node
 from scaffoldmaker.utils.eft_utils import (
     addTricubicHermiteSerendipityEftParameterScaling, determineCubicHermiteSerendipityEft, HermiteNodeLayoutManager)
 from scaffoldmaker.utils.interpolation import (
     computeCubicHermiteDerivativeScaling, computeCubicHermiteEndDerivative, computeCubicHermiteStartDerivative,
-    DerivativeScalingMode, evaluateCoordinatesOnCurve, getCubicHermiteTrimmedCurvesLengths, getNearestLocationOnCurve,
-    interpolateCubicHermite, interpolateCubicHermiteDerivative,
+    DerivativeScalingMode, evaluateCoordinatesOnCurve, getCubicHermiteArcLength, getCubicHermiteTrimmedCurvesLengths,
+    getNearestLocationOnCurve, interpolateCubicHermite, interpolateCubicHermiteDerivative,
     interpolateHermiteLagrangeDerivative, interpolateLagrangeHermiteDerivative,
     interpolateSampleCubicHermite, sampleCubicHermiteCurves,
     sampleCubicHermiteCurvesSmooth, smoothCubicHermiteDerivativesLine, smoothCubicHermiteDerivativesLoop,
     smoothCurveSideCrossDerivatives, getNearestLocationBetweenCurves)
-from scaffoldmaker.utils.networkmesh import NetworkMesh, NetworkMeshBuilder, NetworkMeshGenerateData, \
-    NetworkMeshJunction, NetworkMeshSegment, pathValueLabels
+from scaffoldmaker.utils.networkmesh import (
+    NetworkMesh, NetworkMeshBuilder, NetworkMeshGenerateData, NetworkMeshJunction, NetworkMeshSegment,
+    NetworkSegmentEndStyle, pathValueLabels)
 from scaffoldmaker.utils.tracksurface import TrackSurface
 from scaffoldmaker.utils.zinc_utils import get_nodeset_path_ordered_field_parameters
 import copy
 import math
+
+
+def normalize_safe(v):
+    """
+    :param v: Vector.
+    :return:  Normalized v if not a zero vector, otherwise a copy of v.
+    """
+    mag_v = magnitude(v)
+    if mag_v > 0.0:
+        return [c / mag_v for c in v]
+    return copy.copy(v)
+
+
+def set_magnitude_safe(v, mag):
+    """
+    :param v: Vector.
+    :param mag: New magnitude to set.
+    return: Vector v with magnitude set to mag if not a zero vector, otherwise a copy of v.
+    """
+    old_mag = magnitude(v)
+    if old_mag > 0.0:
+        return mult(v, mag / old_mag)
+    return copy.copy(v)
 
 
 class TubeNetworkMeshGenerateData(NetworkMeshGenerateData):
@@ -273,13 +297,15 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
         self._elementsCountTransition = elementsCountTransition
         self._coreBoundaryScalingMode = coreBoundaryScalingMode
         self._networkSegment = networkSegment
+        self._dome_ends = [(end_style == NetworkSegmentEndStyle.DOME) for end_style in networkSegment.getEndStyles()]
 
         assert elementsCountThroughShell > 0
         self._elementsCountThroughShell = elementsCountThroughShell
         self._rawTubeCoordinatesList = []
         self._rawTrackSurfaceList = []
         for pathParameters in pathParametersList:
-            px, pd1, pd2, pd12 = getPathRawTubeCoordinates(pathParameters, self._elementsCountAround)
+            px, pd1, pd2, pd12 = getPathRawTubeCoordinates(
+                pathParameters, self._elementsCountAround, dome_ends=self._dome_ends)
             self._rawTubeCoordinatesList.append((px, pd1, pd2, pd12))
             nx, nd1, nd2, nd12 = [], [], [], []
             for i in range(len(px)):
@@ -288,6 +314,7 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
                 nd2 += pd2[i]
                 nd12 += pd12[i]
             self._rawTrackSurfaceList.append(TrackSurface(len(px[0]), len(px) - 1, nx, nd1, nd2, nd12, loop1=True))
+        self._rawLengthParameters = self._calculateRawLengthParameters()
         # list[pathsCount][4] of sx, sd1, sd2, sd12; all [nAlong][nAround]:
         self._sampledTubeCoordinates = [[[], [], [], []] for p in range(self._pathsCount)]
         self._rimCoordinates = None  # these are just shell coordinates; with core there may also be transition coords
@@ -304,11 +331,41 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
         # [nAlong][nAcrossMajor][nAcrossMinor] format.
         self._boxElementIds = None  # [along][major][minor]
 
+    def _calculateRawLengthParameters(self):
+        """
+        Calculate scalar field values and derivatives giving mean length along outer segment raw coordinates.
+        Calculated in constructor and stored.
+        :return: Length parameters (lx[], ld1[])
+        """
+        rx = self._rawTubeCoordinatesList[0][0]
+        rd = self._rawTubeCoordinatesList[0][2]
+        rawNodesCount = len(rx)
+        rawElementsCount = rawNodesCount - 1
+        elementsCountAround = len(rx[0])
+        lx = []
+        ld = []
+        length = 0.0
+        for n in range(rawNodesCount):
+            if n > 0:
+                arcLengthSum = 0.0
+                for q in range(elementsCountAround):
+                    arcLengthSum += getCubicHermiteArcLength(rx[n - 1][q], rd[n - 1][q], rx[n][q], rd[n][q])
+                length += arcLengthSum / elementsCountAround
+            lx.append([length])
+            rdMagSum = 0.0
+            for q in range(elementsCountAround):
+                rdMagSum += magnitude(rd[n][q])
+            ld.append([rdMagSum / elementsCountAround])
+        return lx, ld
+
     def getNetworkSegment(self):
         return self._networkSegment
 
     def getCoreBoundaryScalingMode(self):
         return self._coreBoundaryScalingMode
+
+    def getDomeEnds(self):
+        return self._dome_ends
 
     def getElementsCountAround(self):
         return self._elementsCountAround
@@ -344,18 +401,21 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
         :param transitionFactor: Factor > 1.0 multiplying range of trimmed lengths at each end to complete
         local element size transition over.
         """
-        lx, ld = self._lengthParameters
+        lx, ld = self._rawLengthParameters
         # print("lx", lx, "ld", ld)
         rawNodesCountAlong = len(self._rawTubeCoordinatesList[0][0])
         rawElementsCountAlong = rawNodesCountAlong - 1
 
         # work out trim lengths of outer, inner tubes
+        curveLocationMin = (0, 0.0)
+        curveLocationMax = (rawElementsCountAlong, 1.0)
         startCurveLocations = []
         startLengths = []
         sumStartLengths = 0.0
         endCurveLocations = []
         endLengths = []
         sumEndLengths = 0.0
+        trimmedLengths = []  # only for p == 0 i.e. outer path
         for p in range(self._pathsCount):
             px, pd1, pd2, pd12 = self._rawTubeCoordinatesList[p]
             startTrimSurface = self._junctions[0].getTrimSurfaces(self)[p]
@@ -364,7 +424,7 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
             for q in range(self._elementsCountAround):
                 cx = [px[p][q] for p in range(rawNodesCountAlong)]
                 cd2 = [pd2[p][q] for p in range(rawNodesCountAlong)]
-                startCurveLocation = (0, 0.0)
+                startCurveLocation = curveLocationMin
                 startLength = 0.0
                 if startTrimSurface:
                     surfacePosition, curveLocation, intersects = startTrimSurface.findNearestPositionOnCurve(cx, cd2)
@@ -374,7 +434,7 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
                 startCurveLocations.append(startCurveLocation)
                 startLengths.append(startLength)
                 sumStartLengths += startLength
-                endCurveLocation = (rawElementsCountAlong, 1.0)
+                endCurveLocation = curveLocationMax
                 endLength = lx[-1][0]
                 if endTrimSurface:
                     surfacePosition, curveLocation, intersects = endTrimSurface.findNearestPositionOnCurve(cx, cd2)
@@ -430,27 +490,32 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
                         [endTransitionStartLength], [endTransitionSize], [le], 1.0)[0]
                     # print("    p", p, "q", q, "dEnd", dEnd[p][q])
 
-        tubeGenerator = TubeEllipseGenerator()
+        for p in range(self._pathsCount):
 
-        for n in range(elementsCountAlong + 1):
+            # get raw tube coordinates cycling over q (around) fastest, so sequential over n (along segment)
+            altTubeCoordinatesList = [
+                [[self._rawTubeCoordinatesList[p][d][n][q] for n in range(rawNodesCountAlong)]
+                 for q in range(self._elementsCountAround)]
+                for d in range(4)]
 
-            # get point parameters at mean sampling points
-            lm = minStartLength + n * maxElementLength
-            curveLocation = getNearestLocationOnCurve(lx, ld, [lm])[0]
+            for n in range(elementsCountAlong + 1):
 
-            for p in range(self._pathsCount):
-                cx, cd1, cd2, cd12, cd3, cd13 = self._pathParametersList[p]
-                px, pd1 = evaluateCoordinatesOnCurve(cx, cd1, curveLocation, derivative=True)
-                pd2, pd12 = evaluateCoordinatesOnCurve(cd2, cd12, curveLocation, derivative=True)
-                pd3, pd13 = evaluateCoordinatesOnCurve(cd3, cd13, curveLocation, derivative=True)
-                ex, ed1, ed2, ed12 = tubeGenerator.generate(px, pd1, pd2, pd12, pd3, pd13, self._elementsCountAround,
-                                                            maxElementLength)
+                # get point parameters at mean sampling points
+                lm = minStartLength + n * maxElementLength
+                regularCurveLocation = getNearestLocationOnCurve(lx, ld, [lm])[0]
+                e, xi = regularCurveLocation
+                regular_lmd = interpolateCubicHermiteDerivative(lx[e], ld[e], lx[e + 1], ld[e + 1], xi)[0]
+
                 startTrimSurface = self._junctions[0].getTrimSurfaces(self)[p]
                 endTrimSurface = self._junctions[1].getTrimSurfaces(self)[p]
                 startTransition = (startTransitionSize > 0.0) and (lm < startTransitionEndLength)
                 endTransition = (endTransitionSize > 0.0) and (lm > endTransitionStartLength)
-                if startTransition or endTransition:
-                    for q in range(self._elementsCountAround):
+                ex = []
+                ed1 = []
+                ed2 = []
+                ed12 = []
+                for q in range(self._elementsCountAround):
+                    if startTransition or endTransition:
                         if startTransition:
                             ls = startLengths[p * self._elementsCountAround + q]
                             xi = n * startTransitionXiSpacing
@@ -460,29 +525,46 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
                             xi = 1.0 - (elementsCountAlong - n) * endTransitionXiSpacing
                             v1, d1, v2, d2 = [endTransitionStartLength], [endTransitionSize], [le], [dEnd[p][q]]
                         lt = interpolateCubicHermite(v1, d1, v2, d2, xi)[0]
+                        curveLocation = getNearestLocationOnCurve(lx, ld, [lt])[0]
                         ltd = interpolateCubicHermiteDerivative(v1, d1, v2, d2, xi)[0]
-                        qCurveLocation = getNearestLocationOnCurve(lx, ld, [lt])[0]
-                        px, pd1 = evaluateCoordinatesOnCurve(cx, cd1, qCurveLocation, derivative=True)
-                        pd2, pd12 = evaluateCoordinatesOnCurve(cd2, cd12, qCurveLocation, derivative=True)
-                        pd3, pd13 = evaluateCoordinatesOnCurve(cd3, cd13, qCurveLocation, derivative=True)
-                        qex, qed1, qed2, qed12 = tubeGenerator.generate(
-                            px, pd1, pd2, pd12, pd3, pd13, self._elementsCountAround,
-                            ltd * maxElementLength / (startTransitionSize if startTransition else endTransitionSize))
-                        for ev, qv in zip((ex, ed1, ed2, ed12), (qex, qed1, qed2, qed12)):
-                            ev[q] = qv[q]
+                        transitionScale = ltd / (startTransitionSize if startTransition else endTransitionSize)
+                        e, xi = curveLocation
+                        lmd = interpolateCubicHermiteDerivative(lx[e], ld[e], lx[e + 1], ld[e + 1], xi)[0]
+                        d2Scale = transitionScale * maxElementLength / lmd
+                    else:
+                        curveLocation = regularCurveLocation
+                        d2Scale = maxElementLength / regular_lmd
+
+                    x, d2 = evaluateCoordinatesOnCurve(
+                        altTubeCoordinatesList[0][q], altTubeCoordinatesList[2][q], curveLocation, derivative=True)
+                    d1, d12 = evaluateCoordinatesOnCurve(
+                        altTubeCoordinatesList[1][q], altTubeCoordinatesList[3][q], curveLocation, derivative=True)
+                    ex.append(x)
+                    ed1.append(d1)
+                    ed2.append(mult(d2, d2Scale))
+                    ed12.append(mult(d12, d2Scale))
+
+                zero_lengths = any((ex[i - 1] == ex[i]) for i in range(1, self._elementsCountAround))
+                if not zero_lengths:
                     # recalculate d1 around rings
                     # first smooth to get d1 with new directions not tangential to surface
                     ted1 = smoothCubicHermiteDerivativesLoop(ex, ed1)
                     # constraint to be tangential to tube surface
-                    ted1 = [rejection(ted1[q], normalize(cross(ed1[q], ed2[q])))
-                            for q in range(self._elementsCountAround)]
+                    ted1 = [rejection(ted1[q], normalize(cross(ed1[q], ed2[q]))) for q in range(self._elementsCountAround)]
                     # smooth magnitudes only
                     ed1 = smoothCubicHermiteDerivativesLoop(ex, ted1, fixAllDirections=True)
 
                 for lst, ev in zip(self._sampledTubeCoordinates[p], (ex, ed1, ed2, ed12)):
                     lst.append(ev)
 
-        # smooth d2, d12
+            # # smooth d2. Future: smooth d12?
+            # nodesCountAlong = elementsCountAlong + 1
+            # for q in range(self._elementsCountAround):
+            #     ux = [self._sampledTubeCoordinates[p][0][n][q] for n in range(nodesCountAlong)]
+            #     ud2 = [self._sampledTubeCoordinates[p][2][n][q] for n in range(nodesCountAlong)]
+            #     sd2 = smoothCubicHermiteDerivativesLine(ux, ud2, fixAllDirections=True)
+            #     for n in range(nodesCountAlong):
+            #         self._sampledTubeCoordinates[p][2][n][q] = sd2[n]
 
     def sample(self, fixedElementsCountAlong, targetElementLength):
         self._sampleTubeCoordinates(fixedElementsCountAlong, targetElementLength)
@@ -635,15 +717,17 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
             cd2 = [-d for d in id1[n1End]]  # since these go around in RH sense
         bx = centre
         # following gives the core the expected S-shape distortion when twisted
-        bd1a = interpolateHermiteLagrangeDerivative(ax, set_magnitude(ad1, magnitude(sub(bx, ax))), bx, 1.0)
-        bd1c = interpolateLagrangeHermiteDerivative(bx, cx, set_magnitude(cd1, magnitude(sub(cx, bx))), 0.0)
+        scaled_ad1 = set_magnitude_safe(ad1, magnitude(sub(bx, ax)))
+        bd1a = interpolateHermiteLagrangeDerivative(ax, scaled_ad1, bx, 1.0)
+        scaled_cd1 = set_magnitude_safe(cd1, magnitude(sub(cx, bx)))
+        bd1c = interpolateLagrangeHermiteDerivative(bx, cx, scaled_cd1, 0.0)
         bd1 = mult(add(bd1a, bd1c), 0.5)
         bd2 = mult(add(ad2, cd2), 0.5)
         rx = [ax, bx, cx]
         rd1_us = [ad1, bd1, cd1]
         rd2 = [ad2, bd2, cd2]
         rd1 = smoothCubicHermiteDerivativesLine(rx, rd1_us, fixAllDirections=True)
-        if centreNormal:
+        if centreNormal and (magnitude(centreNormal) > 0.0):
             # constrain centre derivatives to be orthogonal to centreNormal
             rd1[1] = rejection(rd1[1], centreNormal)
             rd2[1] = rejection(rd2[1], centreNormal)
@@ -651,7 +735,7 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
         return rx, rd1, rd2
 
     def _generateCoreCoordinates(self, n2, centre):
-        r"""
+        """
         Sample core box and transition elements by sampling radial crossings along
         major -, minor |, diag1 /, diag2 \ directions.
         From these 3x3 array of points at the corners, centres and mid-sides of the box are determined,
@@ -673,7 +757,9 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
         minor_d1 = [[-d for d in v] for v in minor_d1]
         major_d3[1] = minor_d3[1]
         minor_d1[1] = major_d1[1]
-        centreNormal = normalize(cross(major_d1[1], major_d3[1]))
+        d1_cross_d3 = cross(major_d1[1], major_d3[1])
+        mag_d1_cross_d3 = magnitude(d1_cross_d3)
+        centreNormal = div(d1_cross_d3, mag_d1_cross_d3) if (mag_d1_cross_d3 > 0.0) else d1_cross_d3
         majorBoxSize = self._elementsCountCoreBoxMajor
         minorBoxSize = self._elementsCountCoreBoxMinor
         diag1_n1 = minorBoxSize // -2
@@ -699,22 +785,22 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
         sinTripleAngle = math.sin(tripleAngle)
 
         e00x, e00dr = evaluateCoordinatesOnCurve(diag1_x, diag1_d1, (0, diagXi), derivative=True)
-        e00dc = set_magnitude(add(mult(normalize(diag1_d3[0]), diagXiR), mult(normalize(diag1_d3[1]), diagXi)), magnitude(e00dr))
+        e00dc = set_magnitude_safe(add(mult(normalize_safe(diag1_d3[0]), diagXiR), mult(normalize_safe(diag1_d3[1]), diagXi)), magnitude(e00dr))
         e00d1 = add(mult(e00dr, cosTripleAngle), mult(e00dc, -sinTripleAngle))
         e00d3 = add(mult(e00dr, cosTripleAngle), mult(e00dc, sinTripleAngle))
 
         e02x, e02dr = evaluateCoordinatesOnCurve(diag2_x, diag2_d1, (1, diagXiR), derivative=True)
-        e02dc = set_magnitude(add(mult(normalize(diag2_d3[1]), diagXi), mult(normalize(diag2_d3[2]), diagXiR)), magnitude(e02dr))
+        e02dc = set_magnitude_safe(add(mult(normalize_safe(diag2_d3[1]), diagXi), mult(normalize_safe(diag2_d3[2]), diagXiR)), magnitude(e02dr))
         e02d1 = add(mult(e02dr, cosTripleAngle), mult(e02dc, sinTripleAngle))
         e02d3 = add(mult(e02dr, -cosTripleAngle), mult(e02dc, sinTripleAngle))
 
         e20x, e20dr = evaluateCoordinatesOnCurve(diag2_x, diag2_d1, (0, diagXi), derivative=True)
-        e20dc = set_magnitude(add(mult(normalize(diag2_d3[0]), diagXiR), mult(normalize(diag2_d3[1]), diagXi)), magnitude(e20dr))
+        e20dc = set_magnitude_safe(add(mult(normalize_safe(diag2_d3[0]), diagXiR), mult(normalize_safe(diag2_d3[1]), diagXi)), magnitude(e20dr))
         e20d1 = add(mult(e20dr, cosTripleAngle), mult(e20dc, sinTripleAngle))
         e20d3 = add(mult(e20dr, -cosTripleAngle), mult(e20dc, sinTripleAngle))
 
         e22x, e22dr = evaluateCoordinatesOnCurve(diag1_x, diag1_d1, (1, diagXiR), derivative=True)
-        e22dc = set_magnitude(add(mult(normalize(diag1_d3[1]), diagXi), mult(normalize(diag1_d3[2]), diagXiR)), magnitude(e22dr))
+        e22dc = set_magnitude_safe(add(mult(normalize_safe(diag1_d3[1]), diagXi), mult(normalize_safe(diag1_d3[2]), diagXiR)), magnitude(e22dr))
         e22d1 = add(mult(e22dr, cosTripleAngle), mult(e22dc, -sinTripleAngle))
         e22d3 = add(mult(e22dr, cosTripleAngle), mult(e22dc, sinTripleAngle))
 
@@ -741,14 +827,14 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
             mult(interpolateCubicHermiteDerivative(minor_x[1], minor_d3[1], minor_x[2], minor_d3[2], minorXiR), minorXiR)]
         mag_ed3 = (magnitude(minor_ed3[1]) * minorScale * majorXi + magnitude(major_d3[0]) * majorXiR) / minorScale
         major_ed3 = [
-            set_magnitude(add(mult(normalize(major_d3[0]), majorXiR), mult(normalize(major_d3[1]), majorXi)), mag_ed3),
+            set_magnitude_safe(add(mult(normalize_safe(major_d3[0]), majorXiR), mult(normalize_safe(major_d3[1]), majorXi)), mag_ed3),
             minor_ed3[1],
-            set_magnitude(add(mult(normalize(major_d3[1]), majorXi), mult(normalize(major_d3[2]), majorXiR)), mag_ed3)]
+            set_magnitude_safe(add(mult(normalize_safe(major_d3[1]), majorXi), mult(normalize_safe(major_d3[2]), majorXiR)), mag_ed3)]
         mag_ed1 = (magnitude(major_ed1[1]) * majorScale * minorXi + magnitude(minor_d1[0]) * minorXiR) / majorScale
         minor_ed1 = [
-            set_magnitude(add(mult(normalize(minor_d1[0]), minorXiR), mult(normalize(minor_d1[1]), minorXi)), mag_ed1),
+            set_magnitude_safe(add(mult(normalize_safe(minor_d1[0]), minorXiR), mult(normalize_safe(minor_d1[1]), minorXi)), mag_ed1),
             major_ed1[1],
-            set_magnitude(add(mult(normalize(minor_d1[1]), minorXi), mult(normalize(minor_d1[2]), minorXiR)), mag_ed1)]
+            set_magnitude_safe(add(mult(normalize_safe(minor_d1[1]), minorXi), mult(normalize_safe(minor_d1[2]), minorXiR)), mag_ed1)]
         ed1 = [
             smoothCubicHermiteDerivativesLine(
                 [ex[0], ex[1]], [e00d1, minor_ed1[0]], fixStartDirection=True, fixEndDerivative=True)[0],
@@ -2769,22 +2855,23 @@ class TubeNetworkMeshJunction(NetworkMeshJunction):
                     deltaAngle = nearestAngle - angle
                     weightedSumDeltaAngles += weights[os] * deltaAngle
                 phaseAngle -= weightedSumDeltaAngles / sumWeights
-                lx, ld1, ld2, ld12 = getPathRawTubeCoordinates(
-                    pathParameters, trimPointsCountAround, radius=1.0, phaseAngle=phaseAngle)
-                pointsCountAlong = len(pathParameters[0])
+                tx, td1, td2, td12 = getPathRawTubeCoordinates(
+                    pathParameters, trimPointsCountAround, radius=1.0, phaseAngle=phaseAngle,
+                    dome_ends=self._segments[s].getDomeEnds())
+                pointsCountAlong = len(tx)
 
-                # get coordinates and directions of intersection points of longitudinal lines and other track surfaces
+                # get coordinates and directions of intersections of longitudinal trim lines and other track surfaces
                 rx = []
                 rd1 = []
                 trim = False
                 lowestMaxProportionFromEnd = 1.0
                 for n1 in range(trimPointsCountAround):
-                    cx = [lx[n2][n1] for n2 in range(pointsCountAlong)]
-                    cd1 = [ld1[n2][n1] for n2 in range(pointsCountAlong)]
-                    cd2 = [ld2[n2][n1] for n2 in range(pointsCountAlong)]
-                    cd12 = [ld12[n2][n1] for n2 in range(pointsCountAlong)]
-                    x = lx[endIndex][n1]
-                    d1 = ld1[endIndex][n1]
+                    cx = [tx[n2][n1] for n2 in range(pointsCountAlong)]
+                    cd1 = [td1[n2][n1] for n2 in range(pointsCountAlong)]
+                    cd2 = [td2[n2][n1] for n2 in range(pointsCountAlong)]
+                    cd12 = [td12[n2][n1] for n2 in range(pointsCountAlong)]
+                    x = tx[endIndex][n1]
+                    d1 = td1[endIndex][n1]
                     maxProportionFromEnd = 0.0
                     # find intersection point with other segments which is furthest from end
                     for os in range(self._segmentsCount):
@@ -2831,8 +2918,14 @@ class TubeNetworkMeshJunction(NetworkMeshJunction):
                             (1.0 - lowestMaxProportionFromEnd) if self._segmentsIn[s] else lowestMaxProportionFromEnd
                         eProportion = proportion * (pointsCountAlong - 1)
                         e = min(int(eProportion), (pointsCountAlong - 2))
-                        curveLocation = (e, eProportion - e)
-                        xCentre = evaluateCoordinatesOnCurve(pathParameters[0], pathParameters[1], curveLocation)
+                        xi = eProportion - e
+                        # get mean coordinates of points around at lowestMaxProportionFromEnd
+                        xCentre = [0.0, 0.0, 0.0]
+                        for n1 in range(trimPointsCountAround):
+                            x = interpolateCubicHermite(tx[e][n1], td2[e][n1], tx[e + 1][n1], td2[e + 1][n1], xi)
+                            for c in range(3):
+                                xCentre[c] += x[c]
+                        xCentre = div(xCentre, trimPointsCountAround)
                     # ensure d1 directions go around in same direction as loop
                     for n1 in range(trimPointsCountAround):
                         d1 = rd1[n1]
@@ -4053,7 +4146,6 @@ class TubeNetworkMeshBuilder(NetworkMeshBuilder):
                 networkSegment.getNodeIdentifiers(), networkSegment.getNodeVersions()))
         elementsCountAround = self._defaultElementsCountAround
         elementsCountCoreBoxMinor = self._defaultElementsCountCoreBoxMinor
-
         coreBoundaryScalingMode = self._defaultCoreBoundaryScalingMode
         i = 0
         for layoutAnnotationGroup in self._layoutAnnotationGroups:
@@ -4086,6 +4178,12 @@ class TubeNetworkMeshBuilder(NetworkMeshBuilder):
                         coreBoundaryScalingMode = self._annotationCoreBoundaryScalingMode[i]
                         break
                 i += 1
+
+        if networkSegment.getEndStyle(0) == NetworkSegmentEndStyle.PATCH:
+            return PatchTubeNetworkMeshSegment(networkSegment, pathParametersList, elementsCountAround,
+                                               self._elementsCountThroughShell, self._isCore, elementsCountCoreBoxMinor,
+                                               self._elementsCountTransition, coreBoundaryScalingMode)
+
         return TubeNetworkMeshSegment(networkSegment, pathParametersList, elementsCountAround,
                                       self._elementsCountThroughShell, self._isCore, elementsCountCoreBoxMinor,
                                       self._elementsCountTransition, coreBoundaryScalingMode)
@@ -4119,7 +4217,11 @@ class BodyTubeNetworkMeshBuilder(TubeNetworkMeshBuilder):
     - +d3 direction is ventral, -d3 is dorsal.
     """
 
-    def generateMesh(self, generateData):
+    def generateMesh(self, generateData, dorsalD3Side=True):
+        """
+        :param generateData: TubeNetworkMeshGenerateData
+        :param dorsalD3Side: False for +d3 dorsal direction, True for -d3 direction. Ventral is the reverse.
+        """
         super(BodyTubeNetworkMeshBuilder, self).generateMesh(generateData)
         # build left, right, dorsal, ventral annotation groups
         leftMeshGroup = generateData.getLeftMeshGroup()
@@ -4140,8 +4242,8 @@ class BodyTubeNetworkMeshBuilder(TubeNetworkMeshBuilder):
                 # segment on main axis
                 segment.addSideD2ElementsToMeshGroup(False, leftMeshGroup)
                 segment.addSideD2ElementsToMeshGroup(True, rightMeshGroup)
-            segment.addSideD3ElementsToMeshGroup(False, ventralMeshGroup)
-            segment.addSideD3ElementsToMeshGroup(True, dorsalMeshGroup)
+            segment.addSideD3ElementsToMeshGroup(not dorsalD3Side, ventralMeshGroup)
+            segment.addSideD3ElementsToMeshGroup(dorsalD3Side, dorsalMeshGroup)
 
 
 class TubeEllipseGenerator:
@@ -4208,31 +4310,33 @@ class TubeEllipseGenerator:
         # print("error", p, "=", [magnitude(v) for v in dxi])
 
         # calculate d2, d12 at exi
-        mag1 = magnitude(pd1)
-        mag2 = 0.5 * (magnitude(pd12) + magnitude(pd13))
-        d2ScaleFinal = d2Scale / (math.sqrt(mag1 * mag1 + mag2 * mag2))
         ed2 = []
         ed12 = []
         for i in range(len(ex)):
             xi2, xi3 = exi[i]
-            ed2.append([d2ScaleFinal * (pd1[c] + xi2 * pd12[c] + xi3 * pd13[c]) for c in range(3)])
+            ed2.append([d2Scale * (pd1[c] + xi2 * pd12[c] + xi3 * pd13[c]) for c in range(3)])
             dxi2, dxi3 = edxi[i]
-            ed12.append([d2ScaleFinal * (dxi2 * pd12[c] + dxi3 * pd13[c]) for c in range(3)])
+            ed12.append([d2Scale * (dxi2 * pd12[c] + dxi3 * pd13[c]) for c in range(3)])
 
         return ex, ed1, ed2, ed12
 
 
-def getPathRawTubeCoordinates(pathParameters, elementsCountAround, radius=1.0, phaseAngle=0.0):
+def getPathRawTubeCoordinates(pathParameters, elementsCountAround, radius=1.0, phaseAngle=0.0,
+                              subsample_count=2, dome_ends=(False, False)):
     """
     Generate coordinates around and along a tube in parametric space around the path parameters,
-    at xi2^2 + xi3^2 = radius at the same density as path parameters.
+    at xi2^2 + xi3^2 = radius at the same locations as path parameters plus subsamples including over dome ends.
     :param pathParameters: List over nodes of 6 parameters vectors [cx, cd1, cd2, cd12, cd3, cd13] giving
     coordinates cx along path centre, derivatives cd1 along path, cd2 and cd3 giving side vectors,
     and cd12, cd13 giving rate of change of side vectors. Parameters have 3 components.
     Same format as output of zinc_utils get_nodeset_path_ordered_field_parameters().
-    :param elementsCountAround: Number of elements & nodes to create around tube. First location is at +d2.
+    :param elementsCountAround: Number of elements & nodes to create around tube.
     :param radius: Radius of tube in xi space.
     :param phaseAngle: Starting angle around ellipse, where 0.0 is at d2, pi/2 is at d3.
+    :param subsample_count: Number of subelements between each raw element, at least 2.
+    :param dome_ends: 2-tuple of boolean True if sampled coordinates are rounded into a dome at (start, end).
+    If any are True, extra sub-samples are made between the respective end and the next path parameter to capture the
+    ellipse shape, and >= 2 samples are made between each other parameter to keep near original scaling.
     :return: px[][], pd1[][], pd2[][], pd12[][] with first index in range(pointsCountAlong),
     second inner index in range(elementsCountAround)
     """
@@ -4246,15 +4350,67 @@ def getPathRawTubeCoordinates(pathParameters, elementsCountAround, radius=1.0, p
     td1 = []
     td2 = []
     td12 = []
+    subsample_scale = 1.0 / subsample_count
+    dome_sample_count = max(2, round(0.5 * math.pi * subsample_count))
+    dome_angle = 0.5 * math.pi / dome_sample_count
     for p in range(pointsCountAlong):
         px, pd1, pd2, pd12, pd3, pd13 = [cp[p] for cp in pathParameters]
+        dome1 = dome_ends[0] and (p == 0)
+        dome2 = dome_ends[1] and (p == (pointsCountAlong - 1))
         ex, ed1, ed2, ed12 = tubeGenerator.generate(
-            px, pd1, pd2, pd12, pd3, pd13, elementsCountAround, d2Scale=magnitude(pd1))
+            px, pd1, pd2, pd12, pd3, pd13, elementsCountAround, subsample_scale)
+        if dome1 or dome2:
+            ed2_scale = dome_angle if dome1 else -dome_angle
+            ed2 = [mult(sub(x, px), ed2_scale) for x in ex]
+            ed12 = [mult(d1, ed2_scale) for d1 in ed1]
+            # do the following last as previous values are used to get ed2 and ed12
+            ex = [copy.copy(px) for _ in range(elementsCountAround)]
+            ed1 = [[0.0, 0.0, 0.0] for _ in range(elementsCountAround)]
         tx.append(ex)
         td1.append(ed1)
         td2.append(ed2)
         td12.append(ed12)
-
+        # dome2 subsampling starts one node earlier
+        dome2 = dome_ends[1] and (p >= (pointsCountAlong - 2))
+        dome = dome1 or dome2
+        if (dome or (subsample_count > 1)) and (p < (pointsCountAlong - 1)):
+            q = p + 1
+            qx, qd1, qd2, qd12, qd3, qd13 = [cp[q] for cp in pathParameters]
+            use_sample_count = dome_sample_count if dome else subsample_count
+            for s in range(1, use_sample_count):
+                if dome:
+                    theta = s * dome_angle
+                    cos_theta = math.cos(theta)
+                    sin_theta = math.sin(theta)
+                    if dome1:
+                        xi = 1.0 - cos_theta
+                        xir = sin_theta
+                        dxir = cos_theta / sin_theta
+                    else:  # elif dome2:
+                        xi = sin_theta
+                        xir = cos_theta
+                        dxir = -sin_theta / cos_theta
+                    use_subsample_scale = dome_angle * xir
+                else:
+                    xi = s / subsample_count
+                    use_subsample_scale = subsample_scale
+                sx = interpolateCubicHermite(px, pd1, qx, qd1, xi)
+                sd1 = interpolateCubicHermiteDerivative(px, pd1, qx, qd1, xi)
+                sd2 = interpolateCubicHermite(pd2, pd12, qd2, qd12, xi)
+                sd12 = interpolateCubicHermiteDerivative(pd2, pd12, qd2, qd12, xi)
+                sd3 = interpolateCubicHermite(pd3, pd13, qd3, qd13, xi)
+                sd13 = interpolateCubicHermiteDerivative(pd3, pd13, qd3, qd13, xi)
+                if dome:
+                    sd12 = add(mult(sd12, xir), mult(sd2, dxir))
+                    sd2 = mult(sd2, xir)
+                    sd13 = add(mult(sd13, xir), mult(sd3, dxir))
+                    sd3 = mult(sd3, xir)
+                ex, ed1, ed2, ed12 = tubeGenerator.generate(
+                    sx, sd1, sd2, sd12, sd3, sd13, elementsCountAround, d2Scale=use_subsample_scale)
+                tx.append(ex)
+                td1.append(ed1)
+                td2.append(ed2)
+                td12.append(ed12)
     return tx, td1, td2, td12
 
 
