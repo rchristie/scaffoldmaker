@@ -14,9 +14,9 @@ from scaffoldmaker.utils.interpolation import (
     interpolateSampleCubicHermite, sampleCubicHermiteCurves,
     sampleCubicHermiteCurvesSmooth, smoothCubicHermiteDerivativesLine, smoothCubicHermiteDerivativesLoop,
     smoothCurveSideCrossDerivatives, getNearestLocationBetweenCurves)
+from scaffoldmaker.utils.meshgeneratedata import MeshGenerateData
 from scaffoldmaker.utils.networkmesh import (
-    NetworkMesh, NetworkMeshBuilder, NetworkMeshGenerateData, NetworkMeshJunction, NetworkMeshSegment,
-    NetworkSegmentEndStyle, pathValueLabels)
+    NetworkMesh, NetworkMeshBuilder, NetworkMeshJunction, NetworkMeshSegment, NetworkSegmentEndStyle, pathValueLabels)
 from scaffoldmaker.utils.tracksurface import TrackSurface
 from scaffoldmaker.utils.zinc_utils import get_nodeset_path_ordered_field_parameters
 import copy
@@ -46,7 +46,7 @@ def set_magnitude_safe(v, mag):
     return copy.copy(v)
 
 
-class TubeNetworkMeshGenerateData(NetworkMeshGenerateData):
+class TubeNetworkMeshGenerateData(MeshGenerateData):
     """
     Data for passing to TubeNetworkMesh generateMesh functions.
     """

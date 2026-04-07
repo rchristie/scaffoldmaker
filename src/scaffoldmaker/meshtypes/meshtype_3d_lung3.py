@@ -10,6 +10,7 @@ from scaffoldmaker.annotation.lung_terms import get_lung_term
 from scaffoldmaker.meshtypes.scaffold_base import Scaffold_base
 from scaffoldmaker.utils.meshrefinement import MeshRefinement
 from scaffoldmaker.utils.ellipsoidmesh import EllipsoidMesh
+from scaffoldmaker.utils.meshgeneratedata import MeshGenerateData
 from scaffoldmaker.utils.zinc_utils import translate_nodeset_coordinates
 
 import math
@@ -207,9 +208,10 @@ class MeshType_3d_lung3(Scaffold_base):
         rotateLeftLungY = options["Dorsal-ventral rotation degrees"]
         rotateLeftLungZ = options["Ventral-medial rotation degrees"]
 
-        fieldmodule = region.getFieldmodule()
-        coordinates = find_or_create_field_coordinates(fieldmodule)
-        nodes = fieldmodule.findNodesetByFieldDomainType(Field.DOMAIN_TYPE_NODES)
+        generate_data = MeshGenerateData(region, meshDimension=3)
+        fieldmodule = generate_data.getFieldmodule()
+        coordinates = generate_data.getCoordinates()
+        nodes = generate_data.getNodes()
 
         # annotation groups & nodeset groups
         lungGroup = AnnotationGroup(region, get_lung_term("lung"))
@@ -249,21 +251,19 @@ class MeshType_3d_lung3(Scaffold_base):
         rightLungNodesetGroup = rightLungGroup.getNodesetGroup(nodes)
 
         elementCounts = [elementsCountLateral, elementsCountOblique, elementsCountNormal]
-        halfDepth = ellipsoid_depth * 0.5
-        halfBreadth = ellipsoid_breadth * 0.5
-        halfHeight = ellipsoid_height * 0.5
+        a = halfDepth = ellipsoid_depth * 0.5
+        b = halfBreadth = ellipsoid_breadth * 0.5
+        c = halfHeight = ellipsoid_height * 0.5
         surface_only = False
 
         leftLung, rightLung = 0, 1
         lungs = [lung for show, lung in [(isLeftLung, leftLung), (isRightLung, rightLung)] if show]
-        nodeIdentifier, elementIdentifier = 1, 1
         for lung in lungs:
             oblique_slope_radians = left_oblique_slope_radians if lung == leftLung else right_oblique_slope_radians
             axis2_x_rotation_radians = -oblique_slope_radians
             axis3_x_rotation_radians = math.radians(90) - oblique_slope_radians
 
-            ellipsoid = EllipsoidMesh(halfDepth, halfBreadth, halfHeight, elementCounts, elementsCountTransition,
-                                      surface_only)
+            ellipsoid = EllipsoidMesh(elementCounts, elementsCountTransition, surface_only)
 
             if lung == leftLung:
                 octant_group_lists = []
@@ -291,9 +291,8 @@ class MeshType_3d_lung3(Scaffold_base):
                     octant_group_lists.append(octant_group_list)
 
             ellipsoid.set_octant_group_lists(octant_group_lists)
-
-            ellipsoid.build(axis2_x_rotation_radians, axis3_x_rotation_radians)
-            nodeIdentifier, elementIdentifier = ellipsoid.generate_mesh(fieldmodule, coordinates, nodeIdentifier, elementIdentifier)
+            ellipsoid.build(a, b, c, axis2_x_rotation_radians, axis3_x_rotation_radians)
+            ellipsoid.generate_mesh(generate_data)
 
         for lung in lungs:
             isLeft = True if lung == leftLung else False

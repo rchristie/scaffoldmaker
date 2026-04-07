@@ -6,6 +6,7 @@ from cmlibs.utils.zinc.field import find_or_create_field_coordinates
 from scaffoldmaker.annotation.annotationgroup import AnnotationGroup
 from scaffoldmaker.meshtypes.scaffold_base import Scaffold_base
 from scaffoldmaker.utils.ellipsoidmesh import EllipsoidMesh, EllipsoidSurfaceD3Mode
+from scaffoldmaker.utils.meshgeneratedata import MeshGenerateData
 from scaffoldmaker.utils.meshrefinement import MeshRefinement
 
 
@@ -123,13 +124,13 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
         axis2_x_rotation_radians = math.radians(options["Axis 2 x-rotation degrees"])
         axis3_x_rotation_radians = math.radians(options["Axis 3 x-rotation degrees"])
         surface_only = options["2D surface only"]
-        nway_derivative_factor = options["Advanced n-way derivative factor"]
+        nway_d_factor = options["Advanced n-way derivative factor"]
         surface_d3_mode = EllipsoidSurfaceD3Mode(options["Advanced surface D3 mode"])
 
         fieldmodule = region.getFieldmodule()
         coordinates = find_or_create_field_coordinates(fieldmodule)
 
-        ellipsoid = EllipsoidMesh(a, b, c, element_counts, transition_element_count, surface_only)
+        ellipsoid = EllipsoidMesh(element_counts, transition_element_count, surface_only)
 
         left_group = AnnotationGroup(region, ("left", ""))
         right_group = AnnotationGroup(region, ("right", ""))
@@ -153,11 +154,10 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
             annotation_groups += [box_group, transition_group]
             ellipsoid.set_box_transition_groups(box_group.getGroup(), transition_group.getGroup())
 
-        ellipsoid.set_nway_derivative_factor(nway_derivative_factor)
-        ellipsoid.set_surface_d3_mode(surface_d3_mode)
-
-        ellipsoid.build(axis2_x_rotation_radians, axis3_x_rotation_radians)
-        ellipsoid.generate_mesh(fieldmodule, coordinates)
+        ellipsoid.build(a, b, c, axis2_x_rotation_radians, axis3_x_rotation_radians, nway_d_factor=nway_d_factor,
+                        surface_d3_mode=surface_d3_mode)
+        generate_data = MeshGenerateData(region, meshDimension=(2 if surface_only else 3))
+        ellipsoid.generate_mesh(generate_data)
 
         return annotation_groups, None
 
