@@ -4,6 +4,7 @@ Utility class for defining network meshes from 1-D connectivity and lateral axes
 from cmlibs.utils.zinc.field import find_or_create_field_coordinates
 from cmlibs.zinc.field import Field
 from scaffoldmaker.annotation.annotationgroup import AnnotationGroup
+from scaffoldmaker.utils.eft_utils import HermiteNodeLayoutManager
 
 
 class MeshGenerateData:
@@ -24,6 +25,8 @@ class MeshGenerateData:
         self._coordinates = find_or_create_field_coordinates(self._fieldmodule, coordinateFieldName)
         self._nodeIdentifier = startNodeIdentifier
         self._elementIdentifier = startElementIdentifier
+        self._nodeLayoutManager = HermiteNodeLayoutManager()
+        self._nodeLayoutMap = {}
         self._annotationGroups = []  # list of AnnotationGroup to return for mesh's scaffold
         self._annotationGroupMap = {}  # map from annotation term (name, ontId) to AnnotationGroup in output region
 
@@ -45,6 +48,12 @@ class MeshGenerateData:
         """
         return self._fieldmodule
 
+    def getHermiteNodeLayoutManager(self):
+        """
+        :return: HermiteNodeLayoutManager for constructing node layouts used by elements in mesh.
+        """
+        return self._nodeLayoutManager
+
     def getMesh(self):
         """
         :return: Zinc Mesh for elements being built.
@@ -56,6 +65,36 @@ class MeshGenerateData:
         :return: Dimension of elements being built.
         """
         return self._meshDimension
+
+    def getNodeLayout(self, nodeIdentifier):
+        """
+        Get node layout to use for a node.
+        :param nodeIdentifier: Node identifier to query.
+        :return: NodeLayout or None if none.
+        """
+        assert nodeIdentifier
+        return self._nodeLayoutMap.get(nodeIdentifier)
+
+    def setNodeLayout(self, nodeIdentifier, nodeLayout):
+        """
+        Set node layout to use for a node.
+        :param nodeIdentifier: Node identifier to map.
+        :param nodeLayout: NodeLayout or None to clear.
+        """
+        assert nodeIdentifier
+        if nodeLayout:
+            self._nodeLayoutMap[nodeIdentifier] = nodeLayout
+        else:
+            del self._nodeLayoutMap[nodeIdentifier]
+
+    def setNodeLayoutIfNew(self, nodeIdentifier, nodeLayout):
+        """
+        Set node layout to use for a node, if and only if it hasn't been set before.
+        :param nodeIdentifier: Node identifier to map.
+        :param nodeLayout: NodeLayout; may not be None.
+        """
+        if nodeIdentifier and nodeLayout and (not self._nodeLayoutMap.get(nodeIdentifier)):
+            self._nodeLayoutMap[nodeIdentifier] = nodeLayout
 
     def getNodes(self):
         """

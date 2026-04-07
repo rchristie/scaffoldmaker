@@ -356,7 +356,7 @@ class MeshType_3d_lung4(Scaffold_base):
             lower_ellipsoid_mesh.merge_octant(octant4, quadrant=1)
             lower_ellipsoid_mesh.copy_to_negative_axis1()
 
-            node_layout_manager = lower_ellipsoid_build.get_node_layout_manager()
+            node_layout_manager = generate_data.getHermiteNodeLayoutManager()
             node_layout_permuted = node_layout_manager.getNodeLayoutRegularPermuted(d3Defined=True)
             for n1 in range(element_counts[0] + 1):
                 lower_ellipsoid_mesh.set_node_parameters(
@@ -365,16 +365,15 @@ class MeshType_3d_lung4(Scaffold_base):
             lower_ellipsoid_mesh.set_octant_group_lists(lower_octant_group_lists)
             lower_ellipsoid_mesh.generate_mesh(generate_data)
 
+            node_layout_6way = node_layout_manager.getNodeLayout6Way12(d3Defined=True)
             for ellipsoid in [middle_ellipsoid, upper_ellipsoid] if (lung == right_lung) else [upper_ellipsoid]:
-                node_layout_manager = ellipsoid.get_node_layout_manager()
-                node_layout_6way = node_layout_manager.getNodeLayout6Way12(d3Defined=True)
                 for n1 in range(element_counts[0] + 1):
                     nid = (lower_ellipsoid_mesh.get_node_identifier(
                         n1, half_counts[1], element_counts[2] + 2 * elements_count_lower_extension - half_counts[2])
                            if (((lung == left_lung) and (n1 >= half_counts[0])) or
                                ((lung == right_lung) and (n1 <= half_counts[0]))) else None)
-                    ellipsoid.set_node_parameters(n1, half_counts[1], half_counts[2], hilum_x[n1],
-                                                        nid, node_layout=node_layout_6way)
+                    ellipsoid.set_node_parameters(n1, half_counts[1], half_counts[2], hilum_x[n1], nid,
+                                                  node_layout=node_layout_6way)
                 ellipsoid.set_octant_group_lists(
                     middle_octant_group_lists if ((ellipsoid == middle_ellipsoid) and
                                                   (ellipsoid != upper_ellipsoid)) else upper_octant_group_lists)

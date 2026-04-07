@@ -84,8 +84,8 @@ class EllipsoidMesh:
                 # print(s)
             self._nx.append(nx_layer)
             self._nids.append(nids_layer)
-        self._node_layout_manager = HermiteNodeLayoutManager()
-        self._prescribed_node_layouts = []  # list of (n1, n2, n3, node_layout)
+        self._added_node_layouts = False  # flag set when this is done once
+        self._prescribed_node_layouts = []  # list of (n1, n2, n3, node_layout), sets node layout before node created
 
     def set_box_transition_groups(self, box_group, transition_group):
         """
@@ -530,18 +530,20 @@ class EllipsoidMesh:
                 return True
         return False
 
-    def _get_nid_to_node_layout_map_3d(self, node_layout_manager):
+    def _add_node_layouts_3d(self, generate_data):
         """
-        Get map from node identifier to special node layout.
-        :param node_layout_manager: Manager of node layouts for getting standard layouts from.
-        :return: map from node identifier to special node layout. No entry made if default=None layout.
+        Fill map from node identifier to special node layout. Does not modify node layout mappings that already exist.
+        :param generate_data: MeshGenerateData with region, field, node/element identifier and node layout data.
         """
+        if self._added_node_layouts:
+            return  # don't run again
+        self._added_node_layouts = True
+        node_layout_manager = generate_data.getHermiteNodeLayoutManager()
         node_layout_permuted = node_layout_manager.getNodeLayoutRegularPermuted(d3Defined=True)
         node_layout_3way12 = node_layout_manager.getNodeLayout3WayPoints12()
         node_layout_3way13 = node_layout_manager.getNodeLayout3WayPoints13()
         node_layout_3way23 = node_layout_manager.getNodeLayout3WayPoints23()
         node_layout_4way = node_layout_manager.getNodeLayout4WayPoints()
-        nid_to_node_layout = {}
         upper_trans_counts = [self._element_counts[i] - self._trans_count for i in range(3)]
         # bottom and top transition side face nodes are fully permuted
         for nt in range(1, self._trans_count + 1):
@@ -550,11 +552,11 @@ class EllipsoidMesh:
                 for n2 in range(self._trans_count + 1, upper_trans_counts[1]):
                     for n1 in (self._trans_count - nt, upper_trans_counts[0] + nt):
                         nid = self._nids[n3][n2][n1]
-                        nid_to_node_layout[nid] = node_layout_permuted
+                        generate_data.setNodeLayoutIfNew(nid, node_layout_permuted)
                 for n1 in range(self._trans_count + 1, upper_trans_counts[0]):
                     for n2 in (self._trans_count - nt, upper_trans_counts[1] + nt):
                         nid = self._nids[n3][n2][n1]
-                        nid_to_node_layout[nid] = node_layout_permuted
+                        generate_data.setNodeLayoutIfNew(nid, node_layout_permuted)
         for n2 in range(self._element_counts[1] + 1):
             for n1 in range(self._element_counts[0] + 1):
                 # nodes on boundary between bottom transition and box are 4-way on corners, 3-way on edges,
@@ -578,7 +580,7 @@ class EllipsoidMesh:
                         node_layout = node_layout_3way13[0]
                     elif n1 == upper_trans_counts[0]:
                         node_layout = node_layout_3way13[1]
-                    nid_to_node_layout[nid] = node_layout
+                    generate_data.setNodeLayoutIfNew(nid, node_layout)
                 # nodes on boundary between top transition and box are 4-way on corners, 3-way on edges, None in between
                 nid = self._nids[upper_trans_counts[2]][n2][n1]
                 if nid:
@@ -600,51 +602,43 @@ class EllipsoidMesh:
                     elif n1 == upper_trans_counts[0]:
                         node_layout = node_layout_3way13[3]
                     if node_layout:
-                        nid_to_node_layout[nid] = node_layout
+                        generate_data.setNodeLayoutIfNew(nid, node_layout)
         # 3-way points on box edges up middle, fully permuted on faces
         for n3 in range(self._trans_count + 1, upper_trans_counts[2]):
             for n2 in range(self._trans_count + 1, upper_trans_counts[1]):
                 for n1 in (self._trans_count, upper_trans_counts[0]):
                     nid = self._nids[n3][n2][n1]
-                    nid_to_node_layout[nid] = node_layout_permuted
+                    generate_data.setNodeLayoutIfNew(nid, node_layout_permuted)
             for n1 in range(self._trans_count + 1, upper_trans_counts[0]):
                 for n2 in (self._trans_count, upper_trans_counts[1]):
                     nid = self._nids[n3][n2][n1]
-                    nid_to_node_layout[nid] = node_layout_permuted
+                    generate_data.setNodeLayoutIfNew(nid, node_layout_permuted)
             nid = self._nids[n3][self._trans_count][self._trans_count]
-            nid_to_node_layout[nid] = node_layout_3way12[0]
+            generate_data.setNodeLayoutIfNew(nid, node_layout_3way12[0])
             nid = self._nids[n3][self._trans_count][upper_trans_counts[0]]
-            nid_to_node_layout[nid] = node_layout_3way12[1]
+            generate_data.setNodeLayoutIfNew(nid, node_layout_3way12[1])
             nid = self._nids[n3][upper_trans_counts[1]][self._trans_count]
-            nid_to_node_layout[nid] = node_layout_3way12[2]
+            generate_data.setNodeLayoutIfNew(nid, node_layout_3way12[2])
             nid = self._nids[n3][upper_trans_counts[1]][upper_trans_counts[0]]
-            nid_to_node_layout[nid] = node_layout_3way12[3]
+            generate_data.setNodeLayoutIfNew(nid, node_layout_3way12[3])
         # 3-way points on 8 corner transitions out from 4-way points
         for nt in range(self._trans_count):
             nid = self._nids[nt][nt][nt]
-            nid_to_node_layout[nid] = node_layout_3way12[1]
+            generate_data.setNodeLayoutIfNew(nid, node_layout_3way12[1])
             nid = self._nids[nt][nt][self._element_counts[0] - nt]
-            nid_to_node_layout[nid] = node_layout_3way12[0]
+            generate_data.setNodeLayoutIfNew(nid, node_layout_3way12[0])
             nid = self._nids[nt][self._element_counts[1] - nt][nt]
-            nid_to_node_layout[nid] = node_layout_3way12[3]
+            generate_data.setNodeLayoutIfNew(nid, node_layout_3way12[3])
             nid = self._nids[nt][self._element_counts[1] - nt][self._element_counts[0] - nt]
-            nid_to_node_layout[nid] = node_layout_3way12[2]
+            generate_data.setNodeLayoutIfNew(nid, node_layout_3way12[2])
             nid = self._nids[self._element_counts[2] - nt][nt][nt]
-            nid_to_node_layout[nid] = node_layout_3way12[0]
+            generate_data.setNodeLayoutIfNew(nid, node_layout_3way12[0])
             nid = self._nids[self._element_counts[2] - nt][nt][self._element_counts[0] - nt]
-            nid_to_node_layout[nid] = node_layout_3way12[1]
+            generate_data.setNodeLayoutIfNew(nid, node_layout_3way12[1])
             nid = self._nids[self._element_counts[2] - nt][self._element_counts[1] - nt][nt]
-            nid_to_node_layout[nid] = node_layout_3way12[2]
+            generate_data.setNodeLayoutIfNew(nid, node_layout_3way12[2])
             nid = self._nids[self._element_counts[2] - nt][self._element_counts[1] - nt][self._element_counts[0] - nt]
-            nid_to_node_layout[nid] = node_layout_3way12[3]
-        # add prescribed node layouts
-        for n1, n2, n3, node_layout in self._prescribed_node_layouts:
-            nid = self._nids[n3][n2][n1]
-            nid_to_node_layout[nid] = node_layout
-        return nid_to_node_layout
-
-    def get_node_layout_manager(self):
-        return self._node_layout_manager
+            generate_data.setNodeLayoutIfNew(nid, node_layout_3way12[3])
 
     def get_node_identifier(self, n1, n2, n3):
         """
@@ -678,7 +672,7 @@ class EllipsoidMesh:
         :param n3: Index of node in 3-direction.
         :param parameters: List [[x][d1][d2][d3 or None]]
         :param nid: Identifier of node to use at this location, or None if not created yet.
-        :param node_layout: NodeLayout to use for building elements up to this node, or None for default.
+        :param node_layout: Optional NodeLayout for the node to be created here, or None to not set.
         """
         assert 0 <= n1 <= self._element_counts[0]
         assert 0 <= n2 <= self._element_counts[1]
@@ -687,7 +681,8 @@ class EllipsoidMesh:
         assert self._nids[n3][n2][n1] is None
         self._nx[n3][n2][n1] = copy.deepcopy(parameters)
         self._nids[n3][n2][n1] = nid
-        self._prescribed_node_layouts.append((n1, n2, n3, node_layout))
+        if node_layout:
+            self._prescribed_node_layouts.append((n1, n2, n3, node_layout))
 
     def generate_mesh(self, generate_data: MeshGenerateData):
         """
@@ -738,6 +733,17 @@ class EllipsoidMesh:
 
         # create elements
 
+        # set prescribed node layouts
+        prescribed_node_layouts = self._prescribed_node_layouts
+        self._prescribed_node_layouts = []
+        for prescribed_node_layout in prescribed_node_layouts:
+            n1, n2, n3, node_layout = prescribed_node_layout
+            nid = self._nids[n3][n2][n1]
+            if nid:
+                generate_data.setNodeLayout(nid, node_layout)
+            else:
+                self._prescribed_node_layouts.append(node_layout)  # might be created later
+
         mesh = generate_data.getMesh()
         half_counts = [count // 2 for count in self._element_counts]
         octant_mesh_group_lists = None
@@ -757,6 +763,7 @@ class EllipsoidMesh:
                 transition_mesh_group = self._transition_group.getOrCreateMeshGroup(mesh)
 
         if self._surface_only:
+            node_layout_manager = generate_data.getHermiteNodeLayoutManager()
             # 2-D mesh
             elementtemplate_regular = mesh.createElementtemplate()
             elementtemplate_regular.setElementShapeType(Element.SHAPE_TYPE_SQUARE)
@@ -794,8 +801,8 @@ class EllipsoidMesh:
                                 mesh_group.addElement(element)
                 last_nids_row = nids_row
             # around sides
-            node_layout_permuted = self._node_layout_manager.getNodeLayoutRegularPermuted(d3Defined=False)
-            node_layout_triple_points = self._node_layout_manager.getNodeLayoutTriplePoint2D()
+            node_layout_permuted = node_layout_manager.getNodeLayoutRegularPermuted(d3Defined=False)
+            node_layout_triple_points = node_layout_manager.getNodeLayoutTriplePoint2D()
             index_increments = [[0, 1, 0], [-1, 0, 0], [0, -1, 0], [1, 0, 0]]
             increment_number = 0
             index_increment = index_increments[0]
@@ -909,7 +916,7 @@ class EllipsoidMesh:
             elementtemplate_special.setElementShapeType(Element.SHAPE_TYPE_CUBE)
             box_counts = [half_counts[i] - self._trans_count for i in range(3)]
             dbox_counts = [2 * box_counts[i] for i in range(3)]
-            nid_to_node_layout = self._get_nid_to_node_layout_map_3d(self._node_layout_manager)
+            self._add_node_layouts_3d(generate_data)
             # bottom transition
             last_nids_layer = None
             last_nx_layer = None
@@ -944,7 +951,7 @@ class EllipsoidMesh:
                             elementtemplate = elementtemplate_regular
                             eft = eft_regular
                             scalefactors = None
-                            node_layouts = [nid_to_node_layout.get(nid) for nid in nids]
+                            node_layouts = [generate_data.getNodeLayout(nid) for nid in nids]
                             if any(node_layout is not None for node_layout in node_layouts):
                                 node_parameters = [last_nx_row[i1], last_nx_row[i1 - 1],
                                                    nx_row[i1], nx_row[i1 - 1],
@@ -1005,7 +1012,7 @@ class EllipsoidMesh:
                             elementtemplate = elementtemplate_regular
                             eft = eft_regular
                             scalefactors = None
-                            node_layouts = [nid_to_node_layout.get(nid) for nid in nids]
+                            node_layouts = [generate_data.getNodeLayout(nid) for nid in nids]
                             if any(node_layout is not None for node_layout in node_layouts):
                                 node_parameters = [last_nx_layer[i2 - 1][i1 - 1], last_nx_layer[i2 - 1][i1],
                                                    last_nx_layer[i2][i1 - 1], last_nx_layer[i2][i1],
@@ -1085,7 +1092,7 @@ class EllipsoidMesh:
                             elementtemplate = elementtemplate_regular
                             eft = eft_regular
                             scalefactors = None
-                            node_layouts = [nid_to_node_layout.get(nid) for nid in nids]
+                            node_layouts = [generate_data.getNodeLayout(nid) for nid in nids]
                             if any(node_layout is not None for node_layout in node_layouts):
                                 node_parameters = [last_rim_nx_layer[nt - 1][nc], last_rim_nx_layer[nt - 1][ncp],
                                                    last_rim_nx_row[nc], last_rim_nx_row[ncp],
@@ -1148,7 +1155,7 @@ class EllipsoidMesh:
                             elementtemplate = elementtemplate_regular
                             eft = eft_regular
                             scalefactors = None
-                            node_layouts = [nid_to_node_layout.get(nid) for nid in nids]
+                            node_layouts = [generate_data.getNodeLayout(nid) for nid in nids]
                             if any(node_layout is not None for node_layout in node_layouts):
                                 node_parameters = [last_nx_layer[i2 - 1][i1 - 1], last_nx_layer[i2 - 1][i1],
                                                    last_nx_layer[i2][i1 - 1], last_nx_layer[i2][i1],
