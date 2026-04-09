@@ -684,21 +684,23 @@ class EllipsoidMesh:
         if node_layout:
             self._prescribed_node_layouts.append((n1, n2, n3, node_layout))
 
-    def generate_mesh(self, generate_data: MeshGenerateData):
+    def generate_nodes(self, generate_data, n3_start=0, n3_limit=0):
         """
-        After coordinates have been calculated with e.g. build(), generate nodes and elements of ellipsoid.
+        After coordinates have been calculated with e.g. build(), generate nodes of ellipsoid.
+        Allows nodes to be built for just a range of n3 indexes.
         Client is expected to run within ChangeManager(generate_data.getFieldmodule()).
         :param generate_data: MeshGenerateData with region, field, node/element identifier and node layout data.
+        :param n3_start: First n3 index in (0, self._element_counts[2]), or default to 0.
+        :param n3_limit: Limit n3 index in (n3_start + 1, self._element_counts[2] + 1), or default to max limit.
         """
-        fieldmodule = generate_data.getFieldmodule()
+        assert 0 <= n3_start <= self._element_counts[2]
+        if n3_limit:
+            assert n3_start < n3_limit <= (self._element_counts[2] + 1)
+        else:
+            n3_limit = self._element_counts[2] + 1
+
         fieldcache = generate_data.getFieldcache()
         coordinates = generate_data.getCoordinates()
-
-        mesh_dimension = generate_data.getMeshDimension()
-        assert mesh_dimension == (2 if self._surface_only else 3)
-
-        # create nodes
-
         nodes = generate_data.getNodes()
         nodetemplate = nodes.createNodetemplate()
         nodetemplate.defineField(coordinates)
@@ -708,14 +710,14 @@ class EllipsoidMesh:
         for value_label in value_labels:
             nodetemplate.setValueNumberOfVersions(coordinates, -1, value_label, 1)
 
-        for n3 in range(self._element_counts[2] + 1):
+        for n3 in range(n3_start, n3_limit):
             for n2 in range(self._element_counts[1] + 1):
                 for n1 in range(self._element_counts[0] + 1):
                     if self._nids[n3][n2][n1] is not None:
-                        continue  # prescribed node
+                        continue  # existing node
                     parameters = self._nx[n3][n2][n1]
                     if not parameters:
-                        continue
+                        continue  # unusable location
                     x, d1, d2, d3 = parameters
                     if not x:
                         continue  # while in development
@@ -731,7 +733,27 @@ class EllipsoidMesh:
                     if d3:
                         coordinates.setNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D_DS3, 1, d3)
 
-        # create elements
+    def generate_elements(self, generate_data, e3_start=0, e3_limit=0):
+        """
+        After coordinates have been calculated with e.g. build(), and nodes have been generated,
+        generate elements of ellipsoid. Allows elements to be built for just a range of e3 indexes.
+        Client is expected to run within ChangeManager(generate_data.getFieldmodule()).
+        :param generate_data: MeshGenerateData with region, field, node/element identifier and node layout data.
+        :param e3_start: First e3 index in (0, self._element_counts[2] - 1), or default to 0.
+        :param e3_limit: Limit e3 index in (e3_start + 1, self._element_counts[2]), or default to max limit.
+        """
+        assert 0 <= e3_start < self._element_counts[2]
+        if e3_limit:
+            assert e3_start < e3_limit <= self._element_counts[2]
+        else:
+            e3_limit = self._element_counts[2]
+
+        fieldmodule = generate_data.getFieldmodule()
+        fieldcache = generate_data.getFieldcache()
+        coordinates = generate_data.getCoordinates()
+
+        mesh_dimension = generate_data.getMeshDimension()
+        assert mesh_dimension == (2 if self._surface_only else 3)
 
         # set prescribed node layouts
         prescribed_node_layouts = self._prescribed_node_layouts
@@ -777,29 +799,30 @@ class EllipsoidMesh:
             rim_indexes = [[0] + [self._trans_count + 1 + j
                                   for j in range(self._element_counts[i] - 2 * self._trans_count - 1)] +
                            [self._element_counts[i]] for i in range(3)]
-            # bottom rectangle
-            bottom_nids = self._nids[0]
-            last_nids_row = None
-            octant_n3 = 0
-            for i2, n2 in enumerate(rim_indexes[1]):
-                octant_n2 = 2 if (n2 > half_counts[1]) else 0
-                nids_row = []
-                for i1, n1 in enumerate(reversed(rim_indexes[0])):
-                    octant_n1 = 1 if (n1 >= half_counts[0]) else 0
-                    nids_row.append(bottom_nids[n2][n1])
-                    if (i2 > 0) and (i1 > 0):
-                        nids = [last_nids_row[i1 - 1], last_nids_row[i1], nids_row[i1 - 1], nids_row[i1]]
-                        if None in nids:
-                            continue
-                        element_identifier = generate_data.nextElementIdentifier()
-                        element = mesh.createElement(element_identifier, elementtemplate_regular)
-                        element.setNodesByIdentifier(eft_regular, nids)
-                        # print("Element", element_identifier, "nids", nids)
-                        if octant_mesh_group_lists:
-                            octant = octant_n3 + octant_n2 + octant_n1
-                            for mesh_group in octant_mesh_group_lists[octant]:
-                                mesh_group.addElement(element)
-                last_nids_row = nids_row
+            if e3_start == 0:
+                # bottom rectangle
+                bottom_nids = self._nids[0]
+                last_nids_row = None
+                octant_n3 = 0
+                for i2, n2 in enumerate(rim_indexes[1]):
+                    octant_n2 = 2 if (n2 > half_counts[1]) else 0
+                    nids_row = []
+                    for i1, n1 in enumerate(reversed(rim_indexes[0])):
+                        octant_n1 = 1 if (n1 >= half_counts[0]) else 0
+                        nids_row.append(bottom_nids[n2][n1])
+                        if (i2 > 0) and (i1 > 0):
+                            nids = [last_nids_row[i1 - 1], last_nids_row[i1], nids_row[i1 - 1], nids_row[i1]]
+                            if None in nids:
+                                continue
+                            element_identifier = generate_data.nextElementIdentifier()
+                            element = mesh.createElement(element_identifier, elementtemplate_regular)
+                            element.setNodesByIdentifier(eft_regular, nids)
+                            # print("Element", element_identifier, "nids", nids)
+                            if octant_mesh_group_lists:
+                                octant = octant_n3 + octant_n2 + octant_n1
+                                for mesh_group in octant_mesh_group_lists[octant]:
+                                    mesh_group.addElement(element)
+                    last_nids_row = nids_row
             # around sides
             node_layout_permuted = node_layout_manager.getNodeLayoutRegularPermuted(d3Defined=False)
             node_layout_triple_points = node_layout_manager.getNodeLayoutTriplePoint2D()
@@ -808,10 +831,15 @@ class EllipsoidMesh:
             index_increment = index_increments[0]
             elements_count_around12 = \
                 2 * (self._element_counts[0] + self._element_counts[1] - 4 * self._trans_count)
+            quarter_elements_count_around12 = elements_count_around12 // 4
             last_nids_row = None
             last_parameters_row = None
             last_corners_row = None
             for n3 in rim_indexes[2]:
+                if (n3 < e3_start) and (e3_start >= rim_indexes[2][1]):
+                    continue
+                if (n3 > e3_limit) and (e3_limit <= rim_indexes[2][-2]):
+                    continue
                 octant_n3 = 4 if (n3 > half_counts[2]) else 0
                 indexes = [self._element_counts[0], half_counts[1], n3]
                 nids_row = []
@@ -834,8 +862,7 @@ class EllipsoidMesh:
                         index_increment = index_increments[increment_number]
                     else:
                         corners_row.append(False)
-                if n3 > 0:
-                    quarter_elements_count_around12 = elements_count_around12 // 4
+                if n3 > e3_start:
                     octant_nc = []
                     for nc in range(elements_count_around12):
                         ncp = (nc + 1) % elements_count_around12
@@ -881,29 +908,30 @@ class EllipsoidMesh:
                 last_nids_row = nids_row
                 last_parameters_row = parameters_row
                 last_corners_row = corners_row
-            # top rectangle
-            top_nids = self._nids[self._element_counts[2]]
-            last_nids_row = None
-            octant_n3 = 4
-            for i2, n2 in enumerate(rim_indexes[1]):
-                octant_n2 = 2 if (n2 > half_counts[1]) else 0
-                nids_row = []
-                for i1, n1 in enumerate(rim_indexes[0]):
-                    octant_n1 = 1 if (n1 > half_counts[0]) else 0
-                    nids_row.append(top_nids[n2][n1])
-                    if (i2 > 0) and (i1 > 0):
-                        nids = [last_nids_row[i1 - 1], last_nids_row[i1], nids_row[i1 - 1], nids_row[i1]]
-                        if None in nids:
-                            continue
-                        element_identifier = generate_data.nextElementIdentifier()
-                        element = mesh.createElement(element_identifier, elementtemplate_regular)
-                        element.setNodesByIdentifier(eft_regular, nids)
-                        # print("Element", element_identifier, "nids", nids)
-                        if octant_mesh_group_lists:
-                            octant = octant_n3 + octant_n2 + octant_n1
-                            for mesh_group in octant_mesh_group_lists[octant]:
-                                mesh_group.addElement(element)
-                last_nids_row = nids_row
+            if e3_limit == self._element_counts[2]:
+                # top rectangle
+                top_nids = self._nids[self._element_counts[2]]
+                last_nids_row = None
+                octant_n3 = 4
+                for i2, n2 in enumerate(rim_indexes[1]):
+                    octant_n2 = 2 if (n2 > half_counts[1]) else 0
+                    nids_row = []
+                    for i1, n1 in enumerate(rim_indexes[0]):
+                        octant_n1 = 1 if (n1 > half_counts[0]) else 0
+                        nids_row.append(top_nids[n2][n1])
+                        if (i2 > 0) and (i1 > 0):
+                            nids = [last_nids_row[i1 - 1], last_nids_row[i1], nids_row[i1 - 1], nids_row[i1]]
+                            if None in nids:
+                                continue
+                            element_identifier = generate_data.nextElementIdentifier()
+                            element = mesh.createElement(element_identifier, elementtemplate_regular)
+                            element.setNodesByIdentifier(eft_regular, nids)
+                            # print("Element", element_identifier, "nids", nids)
+                            if octant_mesh_group_lists:
+                                octant = octant_n3 + octant_n2 + octant_n1
+                                for mesh_group in octant_mesh_group_lists[octant]:
+                                    mesh_group.addElement(element)
+                    last_nids_row = nids_row
         else:
             # 3-D mesh
             elementtemplate_regular = mesh.createElementtemplate()
@@ -941,7 +969,7 @@ class EllipsoidMesh:
                         octant_n1 = 1 if (n1 > half_counts[0]) else 0
                         nids_row.append(self._nids[n3][n2][n1])
                         nx_row.append(self._nx[n3][n2][n1])
-                        if (nt > 0) and (i2 > 0) and (i1 > 0):
+                        if (n3 > e3_start) and (i2 > 0) and (i1 > 0):
                             nids = [last_nids_row[i1], last_nids_row[i1 - 1],
                                     nids_row[i1], nids_row[i1 - 1],
                                     last_nids_layer[i2 - 1][i1], last_nids_layer[i2 - 1][i1 - 1],
@@ -985,8 +1013,13 @@ class EllipsoidMesh:
             last_nx_layer = None
             last_rim_nids_layer = None
             last_rim_nx_layer = None
+            n3_first = max(e3_start, self._trans_count)
             for i3 in range(dbox_counts[2] + 1):
                 n3 = self._trans_count + i3
+                if n3 < e3_start:
+                    continue
+                if n3 > e3_limit:
+                    continue
                 octant_n3 = 4 if (n3 > half_counts[2]) else 0
                 nids_layer = []
                 nx_layer = []
@@ -1002,7 +1035,7 @@ class EllipsoidMesh:
                         octant_n1 = 1 if (n1 > half_counts[0]) else 0
                         nids_row.append(self._nids[n3][n2][n1])
                         nx_row.append(self._nx[n3][n2][n1])
-                        if (i3 > 0) and (i2 > 0) and (i1 > 0):
+                        if (n3 > n3_first) and (i2 > 0) and (i1 > 0):  # (i3 > 0)
                             nids = [last_nids_layer[i2 - 1][i1 - 1], last_nids_layer[i2 - 1][i1],
                                     last_nids_layer[i2][i1 - 1], last_nids_layer[i2][i1],
                                     last_nids_row[i1 - 1], last_nids_row[i1],
@@ -1079,7 +1112,7 @@ class EllipsoidMesh:
                         rim_nids_row.append(self._nids[n3][n2][n1])
                         rim_nx_row.append(self._nx[n3][n2][n1])
                         octant_nc.append(2 if n2 > half_counts[1] else 0)
-                    if (i3 > 0) and (nt > 0):
+                    if (n3 > n3_first) and (nt > 0):
                         rim_count = len(rim_nids_row)
                         for nc in range(rim_count):
                             ncp = (nc + 1) % rim_count
@@ -1145,7 +1178,7 @@ class EllipsoidMesh:
                         octant_n1 = 1 if (n1 > half_counts[0]) else 0
                         nids_row.append(self._nids[n3][n2][n1])
                         nx_row.append(self._nx[n3][n2][n1])
-                        if (nt < self._trans_count) and (i2 > 0) and (i1 > 0):
+                        if (nt < self._trans_count) and (n3 <= e3_limit) and (i2 > 0) and (i1 > 0):
                             nids = [last_nids_layer[i2 - 1][i1 - 1], last_nids_layer[i2 - 1][i1],
                                     last_nids_layer[i2][i1 - 1], last_nids_layer[i2][i1],
                                     last_nids_row[i1 - 1], last_nids_row[i1],
@@ -1184,3 +1217,11 @@ class EllipsoidMesh:
                 last_nids_layer = nids_layer
                 last_nx_layer = nx_layer
 
+    def generate_mesh(self, generate_data):
+        """
+        After coordinates have been calculated with e.g. build(), generate nodes and elements of ellipsoid.
+        Client is expected to run within ChangeManager(generate_data.getFieldmodule()).
+        :param generate_data: MeshGenerateData with region, field, node/element identifier and node layout data.
+        """
+        self.generate_nodes(generate_data)
+        self.generate_elements(generate_data)
