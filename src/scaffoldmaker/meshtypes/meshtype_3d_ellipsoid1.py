@@ -179,8 +179,13 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
         if core:
             box_group = AnnotationGroup(region, ("box", ""))
             transition_group = AnnotationGroup(region, ("transition", ""))
-            annotation_groups += [box_group, transition_group]
+            core_group = AnnotationGroup(region, ("core", ""))
+            annotation_groups += [box_group, core_group, transition_group]
+            shell_group = AnnotationGroup(region, ("shell", "")) if shell_element_count else None
+            if shell_group:
+                annotation_groups.append(shell_group)
             ellipsoid.set_box_transition_groups(box_group.getGroup(), transition_group.getGroup())
+            ellipsoid.set_core_shell_groups(core_group.getGroup(), shell_group.getGroup() if shell_group else None)
 
         ellipsoid.build(axes_lengths, axis2_x_rotation_radians, axis3_x_rotation_radians, axes_shell_thicknesses,
                         nway_d_factor=nway_d_factor, surface_d3_mode=surface_d3_mode)

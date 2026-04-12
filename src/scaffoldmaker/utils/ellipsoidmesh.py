@@ -54,6 +54,8 @@ class EllipsoidMesh:
         self._core_shell_scaling_mode = core_shell_scaling_mode
         self._box_group = None
         self._transition_group = None
+        self._core_group = None
+        self._shell_group = None
         self._octant_group_lists = None
         none_parameters = [None] * 4  # x, d1, d2, d3
         self._nx = []  # shield mesh with holes over n3, n2, n1, d
@@ -105,6 +107,15 @@ class EllipsoidMesh:
         """
         self._box_group = box_group
         self._transition_group = transition_group
+
+    def set_core_shell_groups(self, core_group, shell_group):
+        """
+        Set zinc groups to fill with elements in core and shell regions, if core is being created.
+        :param core_group: Group field to add elements from core region to.
+        :param shell_group: Group field to add elements from shell region to.
+        """
+        self._core_group = core_group
+        self._shell_group = shell_group
 
     def set_octant_group_lists(self, octant_group_lists):
         """
@@ -836,11 +847,17 @@ class EllipsoidMesh:
                 octant_mesh_group_lists.append(octant_mesh_group_list)
         box_mesh_group = None
         transition_mesh_group = None
-        if not surface_only:
+        core_mesh_group = None
+        shell_mesh_group = None
+        if self._core:
             if self._box_group:
                 box_mesh_group = self._box_group.getOrCreateMeshGroup(mesh)
             if self._transition_group:
                 transition_mesh_group = self._transition_group.getOrCreateMeshGroup(mesh)
+            if self._core_group:
+                core_mesh_group = self._core_group.getOrCreateMeshGroup(mesh)
+            if self._shell_count and self._shell_group:
+                shell_mesh_group = self._shell_group.getOrCreateMeshGroup(mesh)
 
         if surface_only:
             node_layout_manager = generate_data.getHermiteNodeLayoutManager()
@@ -1069,8 +1086,14 @@ class EllipsoidMesh:
                                 octant = octant_n3 + octant_n2 + octant_n1
                                 for mesh_group in octant_mesh_group_lists[octant]:
                                     mesh_group.addElement(element)
-                            if transition_mesh_group:
-                                transition_mesh_group.addElement(element)
+                            if nt > self._shell_count:
+                                if transition_mesh_group:
+                                    transition_mesh_group.addElement(element)
+                                if core_mesh_group:
+                                    core_mesh_group.addElement(element)
+                            else:
+                                if shell_mesh_group:
+                                    shell_mesh_group.addElement(element)
                     nids_layer.append(nids_row)
                     nx_layer.append(nx_row)
                     last_nids_row = nids_row
@@ -1138,6 +1161,8 @@ class EllipsoidMesh:
                                     mesh_group.addElement(element)
                             if box_mesh_group:
                                 box_mesh_group.addElement(element)
+                            if core_mesh_group:
+                                core_mesh_group.addElement(element)
                     nids_layer.append(nids_row)
                     nx_layer.append(nx_row)
                     last_nids_row = nids_row
@@ -1227,8 +1252,14 @@ class EllipsoidMesh:
                                 octant = octant_n3 + octant_nc[nc]
                                 for mesh_group in octant_mesh_group_lists[octant]:
                                     mesh_group.addElement(element)
-                            if transition_mesh_group:
-                                transition_mesh_group.addElement(element)
+                            if nt <= self._transition_count:
+                                if transition_mesh_group:
+                                    transition_mesh_group.addElement(element)
+                                if core_mesh_group:
+                                    core_mesh_group.addElement(element)
+                            else:
+                                if shell_mesh_group:
+                                    shell_mesh_group.addElement(element)
                     rim_nids_layer.append(rim_nids_row)
                     rim_nx_layer.append(rim_nx_row)
                     last_rim_nids_row = rim_nids_row
@@ -1301,8 +1332,14 @@ class EllipsoidMesh:
                                 octant = octant_n3 + octant_n2 + octant_n1
                                 for mesh_group in octant_mesh_group_lists[octant]:
                                     mesh_group.addElement(element)
-                            if transition_mesh_group:
-                                transition_mesh_group.addElement(element)
+                            if nt < self._shell_count:
+                                if shell_mesh_group:
+                                    shell_mesh_group.addElement(element)
+                            else:
+                                if transition_mesh_group:
+                                    transition_mesh_group.addElement(element)
+                                if core_mesh_group:
+                                    core_mesh_group.addElement(element)
                     nids_layer.append(nids_row)
                     nx_layer.append(nx_row)
                     last_nids_row = nids_row
