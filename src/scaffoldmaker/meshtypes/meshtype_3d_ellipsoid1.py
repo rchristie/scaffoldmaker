@@ -31,6 +31,7 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
             "Advanced n-way derivative factor": 0.6,
             "Advanced surface D3 mode": EllipsoidSurfaceD3Mode.SURFACE_NORMAL.value,
             "Core": True,
+            "Core shell scaling mode": 1,
             "Use linear through shell": False,
             "Refine": False,
             "Refine number of elements": 4,
@@ -47,6 +48,7 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
             "Axis 2 x-rotation degrees",
             "Axis 3 x-rotation degrees",
             "Core",
+            "Core shell scaling mode",
             "Advanced n-way derivative factor",
             "Advanced surface D3 mode",
             # "Use linear through shell",
@@ -112,6 +114,8 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
             if thickness <= 0.0:
                 axes_thicknesses[i] = axes_lengths[i] * 0.2
 
+        if options["Core shell scaling mode"] not in (1, 2):
+            options["Core shell scaling mode"] = 1
         if options["Advanced n-way derivative factor"] < 0.1:
             options["Advanced n-way derivative factor"] = 0.1
         elif options["Advanced n-way derivative factor"] > 1.0:
@@ -146,13 +150,15 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
         axis2_x_rotation_radians = math.radians(options["Axis 2 x-rotation degrees"])
         axis3_x_rotation_radians = math.radians(options["Axis 3 x-rotation degrees"])
         core = options["Core"]
+        core_shell_scaling_mode = options["Core shell scaling mode"]
         nway_d_factor = options["Advanced n-way derivative factor"]
         surface_d3_mode = EllipsoidSurfaceD3Mode(options["Advanced surface D3 mode"])
 
         fieldmodule = region.getFieldmodule()
         coordinates = find_or_create_field_coordinates(fieldmodule)
 
-        ellipsoid = EllipsoidMesh(element_counts, shell_element_count, transition_element_count, core)
+        ellipsoid = EllipsoidMesh(element_counts, shell_element_count, transition_element_count, core,
+                                  core_shell_scaling_mode=core_shell_scaling_mode)
 
         left_group = AnnotationGroup(region, ("left", ""))
         right_group = AnnotationGroup(region, ("right", ""))

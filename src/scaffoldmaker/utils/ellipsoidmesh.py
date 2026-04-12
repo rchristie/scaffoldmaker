@@ -6,7 +6,8 @@ from cmlibs.zinc.element import Element, Elementbasis
 from cmlibs.zinc.field import Field
 from cmlibs.zinc.node import Node
 
-from scaffoldmaker.utils.eft_utils import determineCubicHermiteSerendipityEft, HermiteNodeLayoutManager
+from scaffoldmaker.utils.eft_utils import (
+    determineCubicHermiteSerendipityEft, HermiteNodeLayoutManager, resolveEftCoreBoundaryScaling)
 from scaffoldmaker.utils.geometry import (
     getEllipsePointAtTrueAngle, getEllipseTangentAtPoint, moveCoordinatesToEllipsoidSurface,
     moveDerivativeToEllipsoidSurface, moveDerivativeToEllipsoidSurfaceInPlane, sampleCurveOnEllipsoid)
@@ -32,13 +33,16 @@ class EllipsoidMesh:
     Exception: if not core and 0 shell elements, a 2-D surface mesh of quad elements is created.
     """
 
-    def __init__(self, element_counts, shell_element_count=0, transition_element_count=1, core=True):
+    def __init__(self, element_counts, shell_element_count=0, transition_element_count=1, core=True,
+                 core_shell_scaling_mode: int=1):
         """
         :param element_counts: Number of elements across full ellipsoid in 1, 2, 3 directions.
         :param shell_element_count: Number of shell elements >= 0.
         :param transition_element_count: Number of transition elements around outside >= 1.
         :param core: Set to True to fill the core. If False and no shell elements, only makes nodes and 2-D elements
         on the surface.
+        :param core_shell_scaling_mode: Mode controlling how core-shell derivative differences are scaled:
+        1 = use scale factors on last transition element, 2 = use separate version on last transition element.
         """
         assert all((count >= 4) and (count % 2 == 0) for count in element_counts)
         assert 1 <= transition_element_count <= (min(element_counts) // 2 - 1)
@@ -47,6 +51,7 @@ class EllipsoidMesh:
         self._shell_count = shell_element_count
         self._transition_count = transition_element_count
         self._core = core
+        self._core_shell_scaling_mode = core_shell_scaling_mode
         self._box_group = None
         self._transition_group = None
         self._octant_group_lists = None
@@ -998,6 +1003,7 @@ class EllipsoidMesh:
             box_counts = [half_counts[i] - self._rim_count for i in range(3)]
             dbox_counts = [2 * box_counts[i] for i in range(3)]
             self._add_node_layouts_3d(generate_data)
+
             # bottom transition
             last_nids_layer = None
             last_nx_layer = None
@@ -1032,14 +1038,25 @@ class EllipsoidMesh:
                             elementtemplate = elementtemplate_regular
                             eft = eft_regular
                             scalefactors = None
+                            node_parameters = [
+                                last_nx_row[i1], last_nx_row[i1 - 1],
+                                nx_row[i1], nx_row[i1 - 1],
+                                last_nx_layer[i2 - 1][i1], last_nx_layer[i2 - 1][i1 - 1],
+                                last_nx_layer[i2][i1], last_nx_layer[i2][i1 - 1]]
                             node_layouts = [generate_data.getNodeLayout(nid) for nid in nids]
                             if any(node_layout is not None for node_layout in node_layouts):
-                                node_parameters = [last_nx_row[i1], last_nx_row[i1 - 1],
-                                                   nx_row[i1], nx_row[i1 - 1],
-                                                   last_nx_layer[i2 - 1][i1], last_nx_layer[i2 - 1][i1 - 1],
-                                                   last_nx_layer[i2][i1], last_nx_layer[i2][i1 - 1]]
                                 eft, scalefactors = \
                                     determineCubicHermiteSerendipityEft(mesh, node_parameters, node_layouts)
+                            if self._shell_count and (nt == (self._shell_count + 1)):
+                                # apply scale factors or versions on core-shell boundary
+                                if eft is eft_regular:
+                                    # important: modify a non-shared eft
+                                    eft = mesh.createElementfieldtemplate(tricubic_hermite_serendipity_basis)
+                                eft, scalefactors = resolveEftCoreBoundaryScaling(
+                                    eft, scalefactors, node_parameters, nids, self._core_shell_scaling_mode,
+                                    generate_data.getNodes(), generate_data.getCoordinates(),
+                                    generate_data.getFieldcache())
+                            if eft is not eft_regular:
                                 elementtemplate_special.defineField(coordinates, -1, eft)
                                 elementtemplate = elementtemplate_special
                             element_identifier = generate_data.nextElementIdentifier()
@@ -1060,6 +1077,7 @@ class EllipsoidMesh:
                     last_nx_row = nx_row
                 last_nids_layer = nids_layer
                 last_nx_layer = nx_layer
+
             # middle
             upper_trans_counts = [self._element_counts[i] - self._rim_count for i in range(3)]
             last_nids_layer = None
@@ -1177,15 +1195,26 @@ class EllipsoidMesh:
                                 continue
                             elementtemplate = elementtemplate_regular
                             eft = eft_regular
+                            node_parameters = [
+                                last_rim_nx_layer[nt - 1][nc], last_rim_nx_layer[nt - 1][ncp],
+                                last_rim_nx_row[nc], last_rim_nx_row[ncp],
+                                last_rim_nx_layer[nt][nc], last_rim_nx_layer[nt][ncp],
+                                rim_nx_row[nc], rim_nx_row[ncp]]
                             scalefactors = None
                             node_layouts = [generate_data.getNodeLayout(nid) for nid in nids]
                             if any(node_layout is not None for node_layout in node_layouts):
-                                node_parameters = [last_rim_nx_layer[nt - 1][nc], last_rim_nx_layer[nt - 1][ncp],
-                                                   last_rim_nx_row[nc], last_rim_nx_row[ncp],
-                                                   last_rim_nx_layer[nt][nc], last_rim_nx_layer[nt][ncp],
-                                                   rim_nx_row[nc], rim_nx_row[ncp]]
                                 eft, scalefactors = \
                                     determineCubicHermiteSerendipityEft(mesh, node_parameters, node_layouts)
+                            if self._shell_count and (nt == self._transition_count):
+                                # apply scale factors or versions on core-shell boundary
+                                if eft is eft_regular:
+                                    # important: modify a non-shared eft
+                                    eft = mesh.createElementfieldtemplate(tricubic_hermite_serendipity_basis)
+                                eft, scalefactors = resolveEftCoreBoundaryScaling(
+                                    eft, scalefactors, node_parameters, nids, self._core_shell_scaling_mode,
+                                    generate_data.getNodes(), generate_data.getCoordinates(),
+                                    generate_data.getFieldcache())
+                            if eft is not eft_regular:
                                 elementtemplate_special.defineField(coordinates, -1, eft)
                                 elementtemplate = elementtemplate_special
                             element_identifier = generate_data.nextElementIdentifier()
@@ -1240,15 +1269,26 @@ class EllipsoidMesh:
                                 continue
                             elementtemplate = elementtemplate_regular
                             eft = eft_regular
+                            node_parameters = [
+                                last_nx_layer[i2 - 1][i1 - 1], last_nx_layer[i2 - 1][i1],
+                                last_nx_layer[i2][i1 - 1], last_nx_layer[i2][i1],
+                                last_nx_row[i1 - 1], last_nx_row[i1],
+                                nx_row[i1 - 1], nx_row[i1]]
                             scalefactors = None
                             node_layouts = [generate_data.getNodeLayout(nid) for nid in nids]
                             if any(node_layout is not None for node_layout in node_layouts):
-                                node_parameters = [last_nx_layer[i2 - 1][i1 - 1], last_nx_layer[i2 - 1][i1],
-                                                   last_nx_layer[i2][i1 - 1], last_nx_layer[i2][i1],
-                                                   last_nx_row[i1 - 1], last_nx_row[i1],
-                                                   nx_row[i1 - 1], nx_row[i1]]
                                 eft, scalefactors = \
                                     determineCubicHermiteSerendipityEft(mesh, node_parameters, node_layouts)
+                            if self._shell_count and (nt == self._shell_count):
+                                # apply scale factors or versions on core-shell boundary
+                                if eft is eft_regular:
+                                    # important: modify a non-shared eft
+                                    eft = mesh.createElementfieldtemplate(tricubic_hermite_serendipity_basis)
+                                eft, scalefactors = resolveEftCoreBoundaryScaling(
+                                    eft, scalefactors, node_parameters, nids, self._core_shell_scaling_mode,
+                                    generate_data.getNodes(), generate_data.getCoordinates(),
+                                    generate_data.getFieldcache())
+                            if eft is not eft_regular:
                                 elementtemplate_special.defineField(coordinates, -1, eft)
                                 elementtemplate = elementtemplate_special
                             element_identifier = generate_data.nextElementIdentifier()

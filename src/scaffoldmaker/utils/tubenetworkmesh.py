@@ -5,7 +5,7 @@ from cmlibs.maths.vectorops import add, cross, div, dot, magnitude, mult, normal
 from cmlibs.zinc.element import Element, Elementbasis
 from cmlibs.zinc.node import Node
 from scaffoldmaker.utils.eft_utils import (
-    addTricubicHermiteSerendipityEftParameterScaling, determineCubicHermiteSerendipityEft, HermiteNodeLayoutManager)
+    determineCubicHermiteSerendipityEft, resolveEftCoreBoundaryScaling)
 from scaffoldmaker.utils.interpolation import (
     computeCubicHermiteDerivativeScaling, computeCubicHermiteEndDerivative, computeCubicHermiteStartDerivative,
     DerivativeScalingMode, evaluateCoordinatesOnCurve, getCubicHermiteArcLength, getCubicHermiteTrimmedCurvesLengths,
@@ -83,7 +83,6 @@ class TubeNetworkMeshGenerateData(MeshGenerateData):
         self._standardElementtemplate.defineField(self._coordinates, -1, self._standardEft)
 
         d3Defined = (meshDimension == 3) and not isLinearThroughShell
-        self._nodeLayoutManager = HermiteNodeLayoutManager()
         self._nodeLayout5Way = self._nodeLayoutManager.getNodeLayout5Way12(d3Defined)
         self._nodeLayout6Way = self._nodeLayoutManager.getNodeLayout6Way12(d3Defined)
         self._nodeLayout8Way = self._nodeLayoutManager.getNodeLayout8Way12(d3Defined)
@@ -248,30 +247,8 @@ class TubeNetworkMeshGenerateData(MeshGenerateData):
         values to that version equal to the scale factors x version 1.
         :return: New eft, new scalefactors.
         """
-        assert mode in (1, 2)
-        eft, scalefactors, addScalefactors = addTricubicHermiteSerendipityEftParameterScaling(
-            eft, scalefactors, nodeParameters, [5, 6, 7, 8], Node.VALUE_LABEL_D_DS3, version=mode)
-        if mode == 2:
-            nodetemplate = self._nodes.createNodetemplate()
-            n = 4
-            for nodeIdentifier, scalefactor in zip(nodeIdentifiers[4:], addScalefactors):
-                node = self._nodes.findNodeByIdentifier(nodeIdentifier)
-                nodetemplate.defineFieldFromNode(self._coordinates, node)
-                versionsCount = nodetemplate.getValueNumberOfVersions(self._coordinates, -1, Node.VALUE_LABEL_D_DS3)
-                if versionsCount == 1:
-                    # make version 2 of d3 at the node and assign to it
-                    nodetemplate.setValueNumberOfVersions(self._coordinates, -1, Node.VALUE_LABEL_D_DS3, 2)
-                    # merge clears the current parameters so need to re-set
-                    node.merge(nodetemplate)
-                    self._fieldcache.setNode(node)
-                    for valueLabel, value in zip(
-                            (Node.VALUE_LABEL_VALUE, Node.VALUE_LABEL_D_DS1,
-                             Node.VALUE_LABEL_D_DS2, Node.VALUE_LABEL_D_DS3), nodeParameters[n]):
-                        self._coordinates.setNodeParameters(self._fieldcache, -1, valueLabel, 1, value)
-                    d3_v2 = mult(nodeParameters[n][3], scalefactor)
-                    self._coordinates.setNodeParameters(self._fieldcache, -1, Node.VALUE_LABEL_D_DS3, 2, d3_v2)
-                n += 1
-        return eft, scalefactors
+        return resolveEftCoreBoundaryScaling(
+            eft, scalefactors, nodeParameters, nodeIdentifiers, mode, self._nodes, self._coordinates, self._fieldcache)
 
 
 class TubeNetworkMeshSegment(NetworkMeshSegment):
@@ -288,6 +265,8 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
         :param elementsCountCoreBoxMinor: Number of elements across core box minor axis.
         :param elementsCountTransition: Number of elements across transition zone between core box elements and
         shell elements.
+        :param coreBoundaryScalingMode: Mode controlling how core-shell derivative differences are scaled:
+        1 = use scale factors on last transition element, 2 = use separate version on last transition element.
         """
         super(TubeNetworkMeshSegment, self).__init__(networkSegment, pathParametersList)
         self._isCore = isCore

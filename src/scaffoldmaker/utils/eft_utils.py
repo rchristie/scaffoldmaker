@@ -1158,3 +1158,46 @@ def addTricubicHermiteSerendipityEftParameterScaling(eft, scalefactors, nodePara
         return eft, newScalefactors, addScalefactors
     remapEftNodeValueLabelsVersion(eft, localNodeIndexes, [valueLabel], version)
     return eft, scalefactors, addScalefactors
+
+
+def resolveEftCoreBoundaryScaling(eft, scalefactors, nodeParameters, nodeIdentifiers, mode,
+                                  nodes=None, coordinates=None, fieldcache=None):
+    """
+    Resolve differences in d3 scaling across core-shell boundary by one of 2 modes.
+    Works for 8-noded tricubic Hermite serendipity basis only.
+    :param eft: Element field template to modify.
+    :param scalefactors: Existing scalefactors for use with eft.
+    :param nodeParameters: List over 8 (3-D) local nodes in Zinc ordering of 4 parameter vectors
+    x, d1, d2, d3 each with 3 components.
+    :param nodeIdentifiers: List over 8 3-D local nodes giving global node identifiers.
+    :param mode: 1 to set scale factors, 2 to add version 2 to d3 for the boundary nodes and assigning
+    values to that version equal to the scale factors x version 1.
+    :param nodes: Nodeset for nodes for mode 2.
+    :param coordinates: Coordinate field for mode 2.
+    :param fieldcache: Fieldcache for mode 2.
+    :return: New eft, new scalefactors.
+    """
+    assert mode in (1, 2)
+    eft, scalefactors, addScalefactors = addTricubicHermiteSerendipityEftParameterScaling(
+        eft, scalefactors, nodeParameters, [5, 6, 7, 8], Node.VALUE_LABEL_D_DS3, version=mode)
+    if mode == 2:
+        nodetemplate = nodes.createNodetemplate()
+        n = 4
+        for nodeIdentifier, scalefactor in zip(nodeIdentifiers[4:], addScalefactors):
+            node = nodes.findNodeByIdentifier(nodeIdentifier)
+            nodetemplate.defineFieldFromNode(coordinates, node)
+            versionsCount = nodetemplate.getValueNumberOfVersions(coordinates, -1, Node.VALUE_LABEL_D_DS3)
+            if versionsCount == 1:
+                # make version 2 of d3 at the node and assign to it
+                nodetemplate.setValueNumberOfVersions(coordinates, -1, Node.VALUE_LABEL_D_DS3, 2)
+                # merge clears the current parameters so need to re-set
+                node.merge(nodetemplate)
+                fieldcache.setNode(node)
+                for valueLabel, value in zip(
+                        (Node.VALUE_LABEL_VALUE, Node.VALUE_LABEL_D_DS1,
+                         Node.VALUE_LABEL_D_DS2, Node.VALUE_LABEL_D_DS3), nodeParameters[n]):
+                    coordinates.setNodeParameters(fieldcache, -1, valueLabel, 1, value)
+                d3_v2 = mult(nodeParameters[n][3], scalefactor)
+                coordinates.setNodeParameters(fieldcache, -1, Node.VALUE_LABEL_D_DS3, 2, d3_v2)
+            n += 1
+    return eft, scalefactors
