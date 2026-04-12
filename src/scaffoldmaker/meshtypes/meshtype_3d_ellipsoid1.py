@@ -23,8 +23,7 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
     def getDefaultOptions(cls, parameterSetName='Default'):
         options = {
             "Numbers of elements across axes": [4, 6, 8],
-            "Number of shell elements": 0,
-            "Number of transition elements": 1,
+            "Numbers of shell, transition elements": [0, 1],
             "Axes lengths": [1.0, 1.5, 2.0],
             "Axes shell thicknesses": [0.2, 0.2, 0.2],
             "Axis 2 x-rotation degrees": 0.0,
@@ -42,8 +41,7 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
     def getOrderedOptionNames(cls):
         return [
             "Numbers of elements across axes",
-            "Number of shell elements",
-            "Number of transition elements",
+            "Numbers of shell, transition elements",
             "Axes lengths",
             "Axes shell thicknesses",
             "Axis 2 x-rotation degrees",
@@ -77,14 +75,19 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
             if (max_rim_count is None) or (transition_count < max_rim_count):
                 max_rim_count = transition_count
 
-        if options["Number of shell elements"] > max_rim_count - 1:
-            options["Number of shell elements"] = max_rim_count - 1
+        shell_transition_counts = options["Numbers of shell, transition elements"]
+        count = len(axes_numbers)
+        if count < 2:
+            shell_transition_counts[1] = 1
+        elif count > 2:
+            del shell_transition_counts[2:]
+        if shell_transition_counts[0] > max_rim_count - 1:
+            shell_transition_counts[0] = max_rim_count - 1
             dependent_changes = True
-
-        if options["Number of transition elements"] < 1:
-            options["Number of transition elements"] = 1
-        elif (options["Number of transition elements"] + options["Number of shell elements"]) > max_rim_count:
-            options["Number of transition elements"] = max_rim_count - options["Number of shell elements"]
+        if shell_transition_counts[1] < 1:
+            shell_transition_counts[1] = 1
+        elif (shell_transition_counts[1] + shell_transition_counts[0]) > max_rim_count:
+            shell_transition_counts[1] = max_rim_count - shell_transition_counts[0]
             dependent_changes = True
 
         axes_lengths = options["Axes lengths"]
@@ -136,8 +139,7 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
         :return: empty list of AnnotationGroup, None
         """
         element_counts = options["Numbers of elements across axes"]
-        shell_element_count = options["Number of shell elements"]
-        transition_element_count = options["Number of transition elements"]
+        shell_element_count, transition_element_count = options["Numbers of shell, transition elements"]
         axes_lengths = options["Axes lengths"]
         axes_shell_thicknesses = options["Axes shell thicknesses"]
 
