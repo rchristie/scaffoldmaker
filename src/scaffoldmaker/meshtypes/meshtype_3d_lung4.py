@@ -237,9 +237,10 @@ class MeshType_3d_lung4(Scaffold_base):
         annotation_groups = [lung_group] + left_annotation_groups + right_annotation_groups + \
                             [box_group, transition_group]
 
-        a = half_ml_size = ellipsoid_ml_size * 0.5
-        b = half_dv_size = ellipsoid_dv_size * 0.5
-        c = half_height = ellipsoid_height * 0.5
+        half_ml_size = ellipsoid_ml_size * 0.5
+        half_dv_size = ellipsoid_dv_size * 0.5
+        half_height = ellipsoid_height * 0.5
+        axes_lengths = [half_ml_size, half_dv_size, half_height]
 
         pi__3 = math.pi / 3.0
         sin_pi__3 = math.sin(pi__3)
@@ -297,18 +298,18 @@ class MeshType_3d_lung4(Scaffold_base):
                     lower_octant_group_lists = middle_octant_group_lists = upper_octant_group_lists = None
 
             element_counts = [elements_count_lateral, elements_count_oblique, elements_count_oblique]
-            lower_ellipsoid_build = EllipsoidMesh(element_counts, elements_count_transition)
+            lower_ellipsoid_build = EllipsoidMesh(element_counts, transition_element_count=elements_count_transition)
             lower_ellipsoid_build.set_box_transition_groups(box_group.getGroup(), transition_group.getGroup())
-            upper_ellipsoid = EllipsoidMesh(element_counts, elements_count_transition)
+            upper_ellipsoid = EllipsoidMesh(element_counts, transition_element_count=elements_count_transition)
             upper_ellipsoid.set_box_transition_groups(box_group.getGroup(), transition_group.getGroup())
             if lung == right_lung:
-                middle_ellipsoid = EllipsoidMesh(element_counts, elements_count_transition)
+                middle_ellipsoid = EllipsoidMesh(element_counts, transition_element_count=elements_count_transition)
                 middle_ellipsoid.set_box_transition_groups(box_group.getGroup(), transition_group.getGroup())
             else:
                 middle_ellipsoid = upper_ellipsoid
             half_counts = [count // 2 for count in element_counts]
             octant1 = middle_ellipsoid.build_octant(
-                a, b, c, half_counts, -pi__3, 0.0,
+                axes_lengths, half_counts, -pi__3, 0.0,
                 surface_d3_mode=EllipsoidSurfaceD3Mode.SURFACE_NORMAL_PLANE_PROJECTION)
             middle_ellipsoid.merge_octant(octant1, quadrant=3)
             if lung == right_lung:
@@ -335,23 +336,23 @@ class MeshType_3d_lung4(Scaffold_base):
                 hilum_x.append(parameters)
 
             octant2 = upper_ellipsoid.build_octant(
-                a, b, c, half_counts, 0.0, pi__3,
+                axes_lengths, half_counts, 0.0, pi__3,
                 surface_d3_mode=EllipsoidSurfaceD3Mode.SURFACE_NORMAL_PLANE_PROJECTION)
             upper_ellipsoid.merge_octant(octant2, quadrant=0)
             octant3 = upper_ellipsoid.build_octant(
-                a, b, c, half_counts, pi__3, 2.0 * pi__3,
+                axes_lengths, half_counts, pi__3, 2.0 * pi__3,
                 surface_d3_mode=EllipsoidSurfaceD3Mode.SURFACE_NORMAL_PLANE_PROJECTION)
             upper_ellipsoid.merge_octant(octant3, quadrant=1)
             upper_ellipsoid.copy_to_negative_axis1()
 
             octant4 = lower_ellipsoid_build.build_octant(
-                a, b, c, half_counts, 2.0 * pi__3, math.pi,
-                lower_lobe_extension, elements_count_lower_extension,
+                axes_lengths, half_counts, 2.0 * pi__3, math.pi,
+                axis2_extension=lower_lobe_extension, axis2_extension_elements_count=elements_count_lower_extension,
                 surface_d3_mode=EllipsoidSurfaceD3Mode.SURFACE_NORMAL_PLANE_PROJECTION)
             # merge into separate lower ellipsoid to have space for extension elements
             lower_ellipsoid_mesh = EllipsoidMesh(
                 [element_counts[0], element_counts[1], element_counts[2] + 2 * elements_count_lower_extension],
-                elements_count_transition)
+                transition_element_count=elements_count_transition)
             lower_ellipsoid_mesh.set_box_transition_groups(box_group.getGroup(), transition_group.getGroup())
             lower_ellipsoid_mesh.merge_octant(octant4, quadrant=1)
             lower_ellipsoid_mesh.copy_to_negative_axis1()

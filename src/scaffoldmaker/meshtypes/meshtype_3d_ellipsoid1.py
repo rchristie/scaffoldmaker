@@ -22,18 +22,17 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
     @classmethod
     def getDefaultOptions(cls, parameterSetName='Default'):
         options = {
-            "Number of elements across axis 1": 4,
-            "Number of elements across axis 2": 6,
-            "Number of elements across axis 3": 8,
-            "2D surface only": False,
+            "Numbers of elements across axes": [4, 6, 8],
+            "Number of shell elements": 0,
             "Number of transition elements": 1,
-            "Axis length x": 1.0,
-            "Axis length y": 1.5,
-            "Axis length z": 2.0,
+            "Axes lengths": [1.0, 1.5, 2.0],
+            "Axes shell thicknesses": [0.2, 0.2, 0.2],
             "Axis 2 x-rotation degrees": 0.0,
             "Axis 3 x-rotation degrees": 90.0,
             "Advanced n-way derivative factor": 0.6,
             "Advanced surface D3 mode": EllipsoidSurfaceD3Mode.SURFACE_NORMAL.value,
+            "Core": True,
+            "Use linear through shell": False,
             "Refine": False,
             "Refine number of elements": 4,
         }
@@ -42,18 +41,17 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
     @classmethod
     def getOrderedOptionNames(cls):
         return [
-            "Number of elements across axis 1",
-            "Number of elements across axis 2",
-            "Number of elements across axis 3",
+            "Numbers of elements across axes",
+            "Number of shell elements",
             "Number of transition elements",
-            "2D surface only",
-            "Axis length x",
-            "Axis length y",
-            "Axis length z",
+            "Axes lengths",
+            "Axes shell thicknesses",
             "Axis 2 x-rotation degrees",
             "Axis 3 x-rotation degrees",
+            "Core",
             "Advanced n-way derivative factor",
             "Advanced surface D3 mode",
+            # "Use linear through shell",
             "Refine",
             "Refine number of elements"
         ]
@@ -61,33 +59,55 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
     @classmethod
     def checkOptions(cls, options):
         dependent_changes = False
-        max_transition_count = None
-        for key in [
-            "Number of elements across axis 1",
-            "Number of elements across axis 2",
-            "Number of elements across axis 3"
-        ]:
-            if options[key] < 4:
-                options[key] = 4
-            elif options[key] % 2:
-                options[key] += 1
-            transition_count = (options[key] // 2) - 1
-            if (max_transition_count is None) or (transition_count < max_transition_count):
-                max_transition_count = transition_count
+
+        max_rim_count = None
+        axes_numbers = options["Numbers of elements across axes"]
+        count = len(axes_numbers)
+        if count < 3:
+            for i in range(3 - count):
+                axes_numbers.append(axes_numbers[-1])
+        elif count > 3:
+            del axes_numbers[3:]
+        for i, number in enumerate(axes_numbers):
+            if number < 4:
+                axes_numbers[i] = 4
+            elif number % 2:
+                axes_numbers[i] += 1
+            transition_count = (axes_numbers[i] // 2) - 1
+            if (max_rim_count is None) or (transition_count < max_rim_count):
+                max_rim_count = transition_count
+
+        if options["Number of shell elements"] > max_rim_count - 1:
+            options["Number of shell elements"] = max_rim_count - 1
+            dependent_changes = True
 
         if options["Number of transition elements"] < 1:
             options["Number of transition elements"] = 1
-        elif options["Number of transition elements"] > max_transition_count:
-            options["Number of transition elements"] = max_transition_count
+        elif (options["Number of transition elements"] + options["Number of shell elements"]) > max_rim_count:
+            options["Number of transition elements"] = max_rim_count - options["Number of shell elements"]
             dependent_changes = True
 
-        for key in [
-            "Axis length x",
-            "Axis length y",
-            "Axis length z"
-        ]:
-            if options[key] <= 0.0:
-                options[key] = 1.0
+        axes_lengths = options["Axes lengths"]
+        count = len(axes_lengths)
+        if count < 3:
+            for i in range(3 - count):
+                axes_lengths.append(axes_lengths[-1])
+        elif count > 3:
+            del axes_lengths[3:]
+        for i, length in enumerate(axes_lengths):
+            if length <= 0.0:
+                axes_lengths[i] = 1.0
+
+        axes_thicknesses = options["Axes shell thicknesses"]
+        count = len(axes_thicknesses)
+        if count < 3:
+            for i in range(3 - count):
+                axes_thicknesses.append(axes_thicknesses[-1])
+        elif count > 3:
+            del axes_thicknesses[3:]
+        for i, thickness in enumerate(axes_thicknesses):
+            if thickness <= 0.0:
+                axes_thicknesses[i] = axes_lengths[i] * 0.2
 
         if options["Advanced n-way derivative factor"] < 0.1:
             options["Advanced n-way derivative factor"] = 0.1
@@ -115,22 +135,22 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
         :param options: Dict containing options. See getDefaultOptions().
         :return: empty list of AnnotationGroup, None
         """
-        element_counts = [options[key] for key in [
-            "Number of elements across axis 1", "Number of elements across axis 2", "Number of elements across axis 3"]]
+        element_counts = options["Numbers of elements across axes"]
+        shell_element_count = options["Number of shell elements"]
         transition_element_count = options["Number of transition elements"]
-        a = options["Axis length x"]
-        b = options["Axis length y"]
-        c = options["Axis length z"]
+        axes_lengths = options["Axes lengths"]
+        axes_shell_thicknesses = options["Axes shell thicknesses"]
+
         axis2_x_rotation_radians = math.radians(options["Axis 2 x-rotation degrees"])
         axis3_x_rotation_radians = math.radians(options["Axis 3 x-rotation degrees"])
-        surface_only = options["2D surface only"]
+        core = options["Core"]
         nway_d_factor = options["Advanced n-way derivative factor"]
         surface_d3_mode = EllipsoidSurfaceD3Mode(options["Advanced surface D3 mode"])
 
         fieldmodule = region.getFieldmodule()
         coordinates = find_or_create_field_coordinates(fieldmodule)
 
-        ellipsoid = EllipsoidMesh(element_counts, transition_element_count, surface_only)
+        ellipsoid = EllipsoidMesh(element_counts, shell_element_count, transition_element_count, core)
 
         left_group = AnnotationGroup(region, ("left", ""))
         right_group = AnnotationGroup(region, ("right", ""))
@@ -148,15 +168,15 @@ class MeshType_3d_ellipsoid1(Scaffold_base):
             octant_group_lists.append(octant_group_list)
         ellipsoid.set_octant_group_lists(octant_group_lists)
 
-        if not surface_only:
+        if core:
             box_group = AnnotationGroup(region, ("box", ""))
             transition_group = AnnotationGroup(region, ("transition", ""))
             annotation_groups += [box_group, transition_group]
             ellipsoid.set_box_transition_groups(box_group.getGroup(), transition_group.getGroup())
 
-        ellipsoid.build(a, b, c, axis2_x_rotation_radians, axis3_x_rotation_radians, nway_d_factor=nway_d_factor,
-                        surface_d3_mode=surface_d3_mode)
-        generate_data = MeshGenerateData(region, meshDimension=(2 if surface_only else 3))
+        ellipsoid.build(axes_lengths, axis2_x_rotation_radians, axis3_x_rotation_radians, axes_shell_thicknesses,
+                        nway_d_factor=nway_d_factor, surface_d3_mode=surface_d3_mode)
+        generate_data = MeshGenerateData(region, meshDimension=(2 if ((shell_element_count == 0) and not core) else 3))
         ellipsoid.generate_mesh(generate_data)
 
         return annotation_groups, None

@@ -1,6 +1,7 @@
 """
 Utilities for building 2-D triangle-shaped meshes out of quad elements with cubic Hermite serendipity interpolation.
 """
+from cmlibs.maths.vectorops import add, mult, sub
 from scaffoldmaker.utils.interpolation import (
     DerivativeScalingMode, get_nway_point, linearlyInterpolateVectors, smoothCubicHermiteDerivativesLine)
 import copy
@@ -43,7 +44,7 @@ class QuadTriangleMesh:
         self._sample_curve = sample_curve
         self._move_x_to_surface = move_x_to_surface
         self._move_d_to_surface = move_d_to_surface
-        self._3_way_d_factor = nway_d_factor
+        self._nway_d_factor = nway_d_factor
         self._element_count12 = box_count1 + box_count2
         self._element_count13 = box_count1 + box_count3
         self._element_count23 = box_count2 + box_count3
@@ -66,6 +67,13 @@ class QuadTriangleMesh:
                 nx_row.append(parameters)
             # print(s)
             self._nx.append(nx_row)
+
+    def create_compatible(self):
+        """
+        :return: Blank QuadTriangleMesh with equivalent definition.
+        """
+        return QuadTriangleMesh(self._box_count1, self._box_count2, self._box_count3, self._sample_curve,
+                                self._move_x_to_surface, self._move_d_to_surface, self._nway_d_factor)
 
     def get_element_count12(self):
         return self._element_count12
@@ -441,7 +449,7 @@ class QuadTriangleMesh:
             [point23[1], point13[2], point12[2]],
             [self._box_count1, self._box_count2 - regular_count2, self._box_count3],
             self._sample_curve, self._move_x_to_surface,
-            nway_d_factor=self._3_way_d_factor)
+            nway_d_factor=self._nway_d_factor)
 
         # smooth sample from sides to 3-way points using end derivatives
         min_weight = 1.0  # arbitrary but looks good
@@ -573,3 +581,40 @@ class QuadTriangleMesh:
                 nx = nx_row[n12]
                 if nx and nx[0] and not nx[3]:
                     nx[3] = evaluate_d3(nx[0], nx[1], nx[2])
+
+    def assign_d3_difference(self, outer, scale=1.0):
+        """
+        Assigns value of d3 for all coordinates with a location, from difference outer x - self x
+        Does not assign d3 if it is already set at a point.
+        :param outer: Outer QuadTriangleMesh with same structure.
+        :param scale: Value to multiply difference by before assigning.
+        """
+        for n13 in range(self._node_count13):
+            nx_row = self._nx[n13]
+            outer_nx_row = outer._nx[n13]
+            for n12 in range(self._node_count12):
+                nx = nx_row[n12]
+                outer_nx = outer_nx_row[n12]
+                if nx and nx[0] and not nx[3]:
+                    nx[3] = mult(sub(outer_nx[0], nx[0]), scale)
+
+    def assign_linear_blend(self, trimesh1, trimesh2, xi):
+        """
+        Assign all parameters to be linearly interpolated between trimesh1 and trimesh2.
+        :param trimesh1: First QuadTriangleMesh to interpolate.
+        :param trimesh2: Last QuadTriangleMesh to interpolate.
+        :param xi: Weighting of trimesh2, from 0.0 to 1.0. Weighting of trimesh1 = 1.0 - xi.
+        """
+        xr = 1.0 - xi
+        for n13 in range(self._node_count13):
+            nx_row = self._nx[n13]
+            nx1_row = trimesh1._nx[n13]
+            nx2_row = trimesh2._nx[n13]
+            for n12 in range(self._node_count12):
+                nx = nx_row[n12]
+                nx1 = nx1_row[n12]
+                nx2 = nx2_row[n12]
+                if nx1 and nx2:
+                    for d in range(4):
+                        if nx1[d] and nx2[d]:
+                            nx[d] = add(mult(nx1[d], xr), mult(nx2[d], xi))

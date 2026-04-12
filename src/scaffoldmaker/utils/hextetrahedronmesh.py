@@ -88,6 +88,9 @@ class HexTetrahedronMesh:
     def get_box_counts(self):
         return self._box_counts
 
+    def get_trans_count(self):
+        return self._trans_count
+
     def get_parameters(self):
         """
         Get parameters array e.g. for copying to ellipsoid.
@@ -95,25 +98,27 @@ class HexTetrahedronMesh:
         """
         return self._nx
 
-    def set_triangle_abc(self, trimesh: QuadTriangleMesh):
+    def set_triangle_abc(self, trimesh: QuadTriangleMesh, shell_depth=0):
         """
         Set parameters on the outer abc surface triangle of octant.
         :param trimesh: Coordinates to set on outer surface.
+        :param shell_depth: Layer in from outer surface to set values for. Must be less than transition count.
         """
         assert trimesh.get_element_count12() == self._diag_counts[0]
         assert trimesh.get_element_count13() == self._diag_counts[1]
         assert trimesh.get_element_count23() == self._diag_counts[2]
-        start_indexes = [self._axis_counts[0], 0, 0]
+        assert shell_depth < self._trans_count
+        start_indexes = [self._axis_counts[0] - shell_depth, 0, 0]
         for n3 in range(self._box_counts[2]):
             px, pd1, pd2, pd3 = trimesh.get_parameters12(n3)
             self._set_coordinates_across([px, pd1, pd2, pd3], [[0, 1, 2, 3]], start_indexes, [[0, 1, 0], [-1, 0, 0]])
             start_indexes[2] += 1
-        start_indexes = [0, 0, self._axis_counts[2]]
+        start_indexes = [0, 0, self._axis_counts[2] - shell_depth]
         for n2 in range(self._box_counts[1]):
             px, pd1, pd2, pd3 = trimesh.get_parameters31(n2, self._box_counts[0] + 1)
             self._set_coordinates_across([px, pd1, pd2, pd3], [[0, 1, 2, 3]], start_indexes, [[1, 0, 0]])
             start_indexes[1] += 1
-        start_indexes = [0, self._axis_counts[1], self._axis_counts[2]]
+        start_indexes = [0, self._axis_counts[1] - shell_depth, self._axis_counts[2] - shell_depth]
         px, pd1, pd2, pd3 = trimesh.get_parameters_diagonal()
         self._set_coordinates_across([px, pd1, pd2, pd3], [[0, 1, 2, 3]], start_indexes, [[1, 0, 0]])
 
@@ -629,6 +634,29 @@ class HexTetrahedronMesh:
                     [n1, self._box_counts[1] + nt, 0], [n1, 0, self._box_counts[2] + nt],
                     [[0, 0, 1], [0, -1, 0]], [2, -2], fix_start_direction=True, fix_end_direction=True)
 
+    def copy_parameters(self, other):
+        """
+        Copy parameters from other HexTetrahedronMesh into self parameters.
+        :param other: Another compatible HexTetrahedronMesh. Can have fewer outer rim layers.
+        """
+        assert other.get_box_counts() == self._box_counts
+        assert other.get_trans_count() <= self._trans_count
+        node_count1, node_count2, node_count3 = [count + 1 for count in other.get_axis_counts()]
+        other_parameters = other.get_parameters()
+        for n3 in range(node_count3):
+            nx_layer = self._nx[n3]
+            other_nx_layer = other_parameters[n3]
+            for n2 in range(node_count2):
+                nx_row = nx_layer[n2]
+                other_nx_row = other_nx_layer[n2]
+                for n1 in range(node_count1):
+                    nx = nx_row[n1]
+                    other_nx = other_nx_row[n1]
+                    if other_nx:
+                        for d in range(4):
+                            if other_nx[d]:
+                                nx[d] = other_nx[d]
+
     def mirror_yz(self):
         """
         Mirror coordinates and derivatives about both y = 0 and z = 0 planes.
@@ -644,3 +672,27 @@ class HexTetrahedronMesh:
                             if d:
                                 d[1] = -d[1]
                                 d[2] = -d[2]
+
+    def set_linear_shell(self, shell_count, inner_triangle_abc: QuadTriangleMesh, outer_triangle_abc: QuadTriangleMesh):
+        """
+        Assign outer layers of HexTetrahedronMesh by linearly interpolating inner/outer parameters.
+        :param shell_count: Number of shell element layers. Require - < shell count < transition count.
+        :param inner_triangle_abc: Inner triangle parameters.
+        :param outer_triangle_abc: Outer triangle parameters.
+        :return:
+        """
+        assert 0 < shell_count < self._trans_count
+        for trimesh in (inner_triangle_abc, outer_triangle_abc):
+            assert trimesh.get_element_count12() == self._diag_counts[0]
+            assert trimesh.get_element_count13() == self._diag_counts[1]
+            assert trimesh.get_element_count23() == self._diag_counts[2]
+        temp_trimesh = inner_triangle_abc.create_compatible() if (shell_count > 1) else None
+        for shell_depth in range(shell_count + 1):
+            if shell_depth == 0:
+                trimesh = outer_triangle_abc
+            elif shell_depth == shell_count:
+                trimesh = inner_triangle_abc
+            else:
+                temp_trimesh.assign_linear_blend(outer_triangle_abc, inner_triangle_abc, shell_depth / shell_count)
+                trimesh = temp_trimesh
+            self.set_triangle_abc(trimesh, shell_depth)
