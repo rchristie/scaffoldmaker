@@ -597,6 +597,19 @@ class QuadTriangleMesh:
             self._smooth_derivative_across(start_indexes, end_indexes, [[0, 1], [-1, 0]], [2, -2],
                 fix_start_direction=True, fix_end_direction=True)
 
+    def assign_d1(self, evaluate_d1):
+        """
+        Assigns value of d1 for all coordinates with a location, from value given by user-supplied function.
+        Does not assign d1 if it is already set at a point.
+        :param evaluate_d1: Callable taking current values of x, d2, d3 and returning d1.
+        """
+        for n13 in range(self._node_count13):
+            nx_row = self._nx[n13]
+            for n12 in range(self._node_count12):
+                nx = nx_row[n12]
+                if nx and nx[0] and not nx[3]:
+                    nx[1] = evaluate_d1(nx[0], nx[2], nx[3])
+
     def assign_d3(self, evaluate_d3):
         """
         Assigns value of d3 for all coordinates with a location, from value given by user-supplied function.

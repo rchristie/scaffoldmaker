@@ -828,7 +828,7 @@ class TubeNetworkMeshSegment(NetworkMeshSegment):
 
             core_octant = None
             if self._core:
-                # extract actual derivatives calculated on edges of triangle abc bounding corse
+                # extract actual derivatives calculated on edges of triangle abc
                 abx, abd1, abd2, abd3 = triangle_abc.get_edge_parameters12()
                 acx, acd1, acd2, acd3 = triangle_abc.get_edge_parameters13()
                 bcx, bcd1, bcd2, bcd3 = triangle_abc.get_edge_parameters23()

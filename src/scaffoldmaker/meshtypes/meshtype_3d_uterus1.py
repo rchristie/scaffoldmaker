@@ -42,7 +42,7 @@ class UterusTubeNetworkMeshGenerateData(TubeNetworkMeshGenerateData):
         self._fundusGroup = self.getOrCreateAnnotationGroup(get_uterus_term("fundus of uterus"))
         self._bodyGroup = self.getOrCreateAnnotationGroup(get_uterus_term("body of uterus"))
         self._bodyNotCervixGroup = self.getOrCreateAnnotationGroup(("body not cervix", ""))
-        # force these annotation group names in base class with these names
+        # force these names for standard annotation groups in the base class
         self._leftGroup = self.getOrCreateAnnotationGroup(("left uterus", ""))
         self._rightGroup = self.getOrCreateAnnotationGroup(("right uterus", ""))
         self._dorsalGroup = self.getOrCreateAnnotationGroup(("dorsal uterus", ""))
