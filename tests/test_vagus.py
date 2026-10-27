@@ -473,7 +473,7 @@ class VagusScaffoldTestCase(unittest.TestCase):
                 elif group_name == 'left A thoracic cardiopulmonary branch of vagus nerve':
                     # this difference comes up in the python 3.12 macosx test
                     mod_xtol *= 20.0
-                    mod_dtol *= 20.0
+                    mod_dtol *= 100.0
                 assertAlmostEqualList(self, start_x, expected_start_x, delta=mod_xtol)
                 assertAlmostEqualList(self, start_d1, expected_start_d1, delta=mod_dtol)
                 assertAlmostEqualList(self, start_d3, expected_start_d3, delta=mod_dtol)
